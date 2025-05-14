@@ -133,3 +133,12 @@ wrapt==1.17.2
 yarl==1.20.0
 zipp==3.21.0
 zstandard==0.23.0
+fastapi
+uvicorn
+pydantic
+transformers
+sentence-transformers
+chromadb
+pdfminer.six
+PyPDF2
+# ...any other dependencies you use...

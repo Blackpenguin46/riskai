@@ -42,7 +42,7 @@ export default function Assessment() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:8000/business-overview", {
+      const res = await fetch("http://localhost:8000/company-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(overview),
