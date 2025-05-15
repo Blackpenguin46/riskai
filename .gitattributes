@@ -1,0 +1,2 @@
+vectordb/*.bin filter=lfs diff=lfs merge=lfs -text
+vectordb/*.sqlite3 filter=lfs diff=lfs merge=lfs -text
