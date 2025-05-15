@@ -11,7 +11,7 @@ build==1.2.2.post1
 cachetools==5.5.2
 certifi==2025.4.26
 charset-normalizer==3.4.2
-chromadb==1.0.9
+chromadb>=0.4.0,<0.7.0
 click==8.2.0
 coloredlogs==15.0.1
 dataclasses-json==0.6.7
@@ -141,4 +141,6 @@ sentence-transformers
 chromadb
 pdfminer.six
 PyPDF2
-# ...any other dependencies you use...
+langchain-huggingface>=0.2.0
+langchain-chroma>=0.2.3
+huggingface-hub[hf_xet]>=0.31.2
