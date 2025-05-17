@@ -15,8 +15,11 @@ WORKDIR /app
 COPY ./backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip
 # install huggingface-hub extras properly (force quoting to avoid shell globbing)
+
+# install your Python deps (and HF extras if you need them)
 RUN pip install --no-cache-dir -r requirements.txt \
-        && pip install --no-cache-dir "huggingface-hub[hf_xet]"
+     && pip install --no-cache-dir "huggingface-hub[hf_xet]"       
+
 
 # Copy the rest of the backend application code into the container at /app
 COPY ./backend /app

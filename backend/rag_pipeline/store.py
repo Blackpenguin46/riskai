@@ -18,7 +18,7 @@ def store_embeddings(chunks: list[Document], embedder, persist_dir: str = "vecto
     """
     db = Chroma.from_documents(
         documents=chunks,
-        embedding_function=embedder,
+        embedding=embedder,  # ✅ Use 'embedding' instead of 'embedding_function'
         persist_directory=persist_dir
     )
     db.persist()

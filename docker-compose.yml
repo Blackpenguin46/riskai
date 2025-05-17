@@ -1,5 +1,3 @@
-
-
 services:
   backend:
     build:
@@ -8,28 +6,12 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount the PDF data directory into the container
-      # The RAG pipeline in api.py expects data in /app/data/
-      # Ensure your local ./data directory (or wherever your PDFs are) is correctly mapped.
-      # If your PDFs are in ./riskai_project/data, this mapping is correct.
-      - ./data:/app/data  # Assuming PDFs are in a 'data' folder at the project root
-      # Persist the vector database outside the container
-      - ./vectordb:/app/vectordb
+      - ./backend/data:/app/data      # your PDFs live here
+      - ./backend/vectordb:/app/vectordb
     environment:
-      PDF_DATA_DIR=/app/backend/data
-      DB_PERSIST_DIR=/app/backend/vectordb
-      # Add any backend-specific environment variables here if needed in the future
-      # e.g., LLM_API_KEY: your_key
-      # For the current setup, none are strictly required by the code for Falcon-RW-1B local model.
-      # However, HuggingFace Transformers might look for cache directories.
-      # HF_HOME: /app/huggingface_cache # Example, if you want to control HF cache location
-      PYTHONUNBUFFERED: 1 # Ensures Python logs are sent straight to Docker logs
-    # healthcheck: # Optional: Add a healthcheck for the backend
-    #   test: ["CMD", "curl", "-f", "http://localhost:8000/docs"] # or another health endpoint
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 30s # Give time for RAG pipeline to initialize
+      PDF_DATA_DIR: /app/data
+      DB_PERSIST_DIR: /app/vectordb
+      PYTHONUNBUFFERED: "1"
     networks:
       - riskai_network
 
@@ -40,30 +22,15 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend # Ensures backend starts before frontend (or at least attempts to)
+      - backend
     environment:
-      # The frontend needs to know where the backend API is.
-      # In Docker Compose, services can reach each other by their service name.
-      # However, the fetch calls in index.tsx use http://localhost:8000.
-      # This will work if both containers are on the host network or if Docker Desktop handles the port mapping transparently.
-      # For a more robust Docker networking setup, the frontend might need to call http://backend:8000.
-      # This would require an environment variable here and modification in frontend/lib/api.ts or directly in index.tsx.
-      # Example for robust setup (requires frontend code change):
+      NODE_ENV: production
+      # if you update your front-end to honor NEXT_PUBLIC_API_URL:
       # NEXT_PUBLIC_API_URL: http://backend:8000
-      # For now, relying on localhost mapping from host to backend container.
-      NODE_ENV: production # Ensures Next.js runs in production mode
     networks:
       - riskai_network
-
-# Top-level 'volumes' section removed as it was empty and causing a parsing error.
-# We are using host-mounted volumes directly in the service definitions above,
-# so a top-level named volumes declaration is not needed for the current setup.
-# If you were to use Docker-managed named volumes, you would define them here, for example:
-# volumes:
-#   my_named_volume: {}
 
 networks:
   riskai_network:
     driver: bridge
-
 
