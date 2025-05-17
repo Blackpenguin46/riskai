@@ -16,6 +16,8 @@ services:
       # Persist the vector database outside the container
       - ./vectordb:/app/vectordb
     environment:
+      PDF_DATA_DIR=/app/backend/data
+      DB_PERSIST_DIR=/app/backend/vectordb
       # Add any backend-specific environment variables here if needed in the future
       # e.g., LLM_API_KEY: your_key
       # For the current setup, none are strictly required by the code for Falcon-RW-1B local model.

@@ -9,6 +9,11 @@ import json
 import traceback
 import re
 
+# unify with env vars so Docker-compose can override
+DB_PERSIST_DIR = os.getenv("DB_PERSIST_DIR", "vectordb")
+PDF_DATA_DIR   = os.getenv("PDF_DATA_DIR",   "data/")
+
+
 # --- RAG/vector/LLM imports and initialization ---
 from rag_pipeline.loader import load_documents, chunk_documents
 from rag_pipeline.embedder import get_embedder
