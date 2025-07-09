@@ -1,0 +1,1 @@
+# Main dashboard module for project navigation and overview

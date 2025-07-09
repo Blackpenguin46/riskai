@@ -8,6 +8,8 @@ import os
 import json
 import traceback
 import re
+import time
+from datetime import datetime
 
 # unify with env vars so Docker-compose can override
 DB_PERSIST_DIR = os.getenv("DB_PERSIST_DIR", "vectordb")
@@ -19,6 +21,24 @@ from rag_pipeline.loader import load_documents, chunk_documents
 from rag_pipeline.embedder import get_embedder
 from rag_pipeline.store import store_embeddings, load_existing_embeddings
 from rag_pipeline.retriever import build_rag_chain
+
+# --- New modules for enhanced functionality ---
+from metrics.dashboard import metrics_dashboard
+from scoring.confidence import confidence_scorer
+from validation.validator import risk_validator
+
+# --- Phase 2 modules for peer review improvements ---
+from data_management.company_data import company_data_manager
+from scoring.objective_scoring import objective_scorer
+from benchmarks.grc_comparison import grc_benchmarker
+
+# --- Assessment redesign modules ---
+from assessment.structured_assessment import structured_assessment
+from assessment.dashboard import assessment_dashboard
+from chat.risk_mitigation_chat import risk_mitigation_chat
+
+# --- Main dashboard module ---
+from dashboard.main_dashboard import main_dashboard
 
 # ------------------------------------
 # Logging Configuration
@@ -82,6 +102,42 @@ async def startup_event():
         logger.error(f"Failed to initialize RAG pipeline: {str(e)}")
         raise RuntimeError(f"Startup error: {str(e)}")
 
+@app.get("/")
+def get_main_dashboard():
+    """Get main project dashboard - central hub for all features"""
+    try:
+        return main_dashboard.get_main_dashboard()
+    except Exception as e:
+        logger.error(f"Error getting main dashboard: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get main dashboard: {str(e)}")
+
+@app.get("/dashboard")
+def get_dashboard():
+    """Alternative route for main dashboard"""
+    try:
+        return main_dashboard.get_main_dashboard()
+    except Exception as e:
+        logger.error(f"Error getting dashboard: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get dashboard: {str(e)}")
+
+@app.get("/dashboard/category/{category}")
+def get_dashboard_category(category: str):
+    """Get detailed information for a specific dashboard category"""
+    try:
+        return main_dashboard.get_category_details(category)
+    except Exception as e:
+        logger.error(f"Error getting dashboard category: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get category: {str(e)}")
+
+@app.get("/dashboard/features")
+def get_feature_status():
+    """Get status of all dashboard features"""
+    try:
+        return main_dashboard.get_feature_status()
+    except Exception as e:
+        logger.error(f"Error getting feature status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get feature status: {str(e)}")
+
 @app.get("/healthz")
 def health_check():
     if qa_chain:
@@ -124,11 +180,16 @@ class RiskTableRow(BaseModel):
 
 class RiskAssessmentResult(BaseModel):
     overall_weighted_score: float
+    confidence_interval: Optional[tuple] = None
+    confidence_level: Optional[float] = None
     risk_table: List[RiskTableRow]
     recommendations: List[str]
     resources: List[Dict[str, str]]
     data_insights: List[str]
     raw_llm_output: Optional[str] = None
+    uncertainty_analysis: Optional[Dict[str, Any]] = None
+    validation_results: Optional[Dict[str, Any]] = None
+    performance_metrics: Optional[Dict[str, Any]] = None
 
 session_context: Dict[str, Any] = {}
 
@@ -207,17 +268,236 @@ async def submit_answers(request: RiskAnswersRequest):
         recommendations, resources, raw_llm = await generate_llm_advice_async(profile, answers_dict, risk_table, context)
         logger.info(f"Generated {len(recommendations)} recommendations and {len(resources)} resources")
 
+        # Calculate confidence scoring and uncertainty analysis
+        start_time = time.time()
+        
+        # Calculate answer quality and data completeness
+        answer_quality = confidence_scorer.calculate_answer_quality(answers_dict)
+        data_completeness = confidence_scorer.calculate_data_completeness(answers_dict, len(RISK_CATEGORIES_DEFINITION))
+        
+        # Calculate confidence score for overall assessment
+        confidence_score = confidence_scorer.calculate_confidence_score(
+            overall_weighted_score, answer_quality, data_completeness
+        )
+        
+        # Perform uncertainty analysis
+        uncertainty_analysis = confidence_scorer.analyze_uncertainty(risk_table, answers_dict)
+        
+        # Perform validation
+        validation_results = risk_validator.validate_assessment(risk_table, profile.dict(), answers_dict)
+        validation_report = risk_validator.generate_validation_report(validation_results)
+        
+        processing_time = time.time() - start_time
+        
+        # Record assessment for metrics
+        assessment_data = {
+            'id': f"assessment_{int(time.time())}",
+            'overall_weighted_score': overall_weighted_score,
+            'confidence_interval': confidence_score.confidence_interval,
+            'risk_table': [row.dict() for row in risk_table],
+            'processing_time': processing_time,
+            'company_profile': profile.dict()
+        }
+        metrics_dashboard.record_assessment(assessment_data)
+        
+        # Get performance metrics
+        performance_metrics = {
+            'answer_quality': answer_quality,
+            'data_completeness': data_completeness,
+            'processing_time': processing_time,
+            'validation_status': validation_report['overall_status']
+        }
+        
         return RiskAssessmentResult(
             overall_weighted_score=overall_weighted_score,
+            confidence_interval=confidence_score.confidence_interval,
+            confidence_level=confidence_score.confidence_level,
             risk_table=risk_table,
             recommendations=recommendations,
             resources=resources,
             data_insights=data_insights,
-            raw_llm_output=raw_llm
+            raw_llm_output=raw_llm,
+            uncertainty_analysis=uncertainty_analysis.__dict__,
+            validation_results=validation_report,
+            performance_metrics=performance_metrics
         )
     except Exception as e:
         logger.error(f"Error processing answers: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to process assessment: {str(e)}")
+
+@app.get("/metrics")
+def get_metrics():
+    """Get system performance metrics"""
+    try:
+        return metrics_dashboard.export_metrics()
+    except Exception as e:
+        logger.error(f"Error getting metrics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
+
+@app.get("/metrics/validate")
+def validate_system():
+    """Validate system performance against thresholds"""
+    try:
+        # Get recent assessment for validation
+        if not metrics_dashboard.assessment_history:
+            return {"status": "no_data", "message": "No assessments available for validation"}
+        
+        recent_assessment = metrics_dashboard.assessment_history[-1]
+        quality_report = metrics_dashboard.validate_assessment_quality({
+            'overall_weighted_score': recent_assessment.overall_score,
+            'confidence_interval': recent_assessment.confidence_interval,
+            'risk_table': [{'id': k, 'score': v} for k, v in recent_assessment.category_scores.items()],
+            'processing_time': recent_assessment.processing_time
+        })
+        
+        return quality_report
+    except Exception as e:
+        logger.error(f"Error validating system: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to validate system: {str(e)}")
+
+@app.post("/company/workspace")
+def create_company_workspace(profile: CompanyProfile):
+    """Create isolated workspace for company data"""
+    try:
+        company_id = f"company_{profile.industry}_{profile.size}_{int(time.time())}"
+        result = company_data_manager.create_company_workspace(company_id, profile.dict())
+        return result
+    except Exception as e:
+        logger.error(f"Error creating company workspace: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create workspace: {str(e)}")
+
+@app.get("/scoring/guidance/{category_id}")
+def get_scoring_guidance(category_id: str):
+    """Get objective scoring guidance for a category"""
+    try:
+        guidance = objective_scorer.get_scoring_guidance(category_id)
+        return guidance
+    except Exception as e:
+        logger.error(f"Error getting scoring guidance: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get guidance: {str(e)}")
+
+@app.get("/benchmarks/comparison")
+def get_benchmark_comparison():
+    """Get quantitative comparison with other GRC tools"""
+    try:
+        return grc_benchmarker.export_benchmark_data()
+    except Exception as e:
+        logger.error(f"Error getting benchmark comparison: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get comparison: {str(e)}")
+
+@app.get("/benchmarks/roi/{company_size}")
+def get_roi_analysis(company_size: str, assessment_frequency: Optional[int] = None):
+    """Get ROI analysis for specific company size"""
+    try:
+        return grc_benchmarker.generate_roi_analysis(company_size, assessment_frequency)
+    except Exception as e:
+        logger.error(f"Error generating ROI analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate ROI analysis: {str(e)}")
+
+@app.get("/assessment/dashboard")
+def get_assessment_dashboard():
+    """Get unified dashboard with clickable section cards"""
+    try:
+        return assessment_dashboard.get_dashboard_overview()
+    except Exception as e:
+        logger.error(f"Error getting assessment dashboard: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get dashboard: {str(e)}")
+
+@app.get("/assessment/structured")
+def get_structured_assessment():
+    """Get structured assessment form based on industry frameworks"""
+    try:
+        return structured_assessment.get_full_assessment()
+    except Exception as e:
+        logger.error(f"Error getting structured assessment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get assessment: {str(e)}")
+
+@app.get("/assessment/section/{section_id}")
+def get_assessment_section(section_id: str):
+    """Get specific assessment section with dashboard details"""
+    try:
+        return assessment_dashboard.get_section_details(section_id)
+    except Exception as e:
+        logger.error(f"Error getting assessment section: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get section: {str(e)}")
+
+@app.get("/assessment/section/{section_id}/questions")
+def get_section_questions(section_id: str):
+    """Get questions for specific assessment section"""
+    try:
+        section = structured_assessment.get_section(section_id)
+        if not section:
+            raise HTTPException(status_code=404, detail=f"Section {section_id} not found")
+        return section
+    except Exception as e:
+        logger.error(f"Error getting section questions: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get section questions: {str(e)}")
+
+@app.post("/assessment/section/{section_id}/progress")
+def update_section_progress(section_id: str, answers: Dict[str, Any]):
+    """Update progress for specific assessment section"""
+    try:
+        return assessment_dashboard.update_section_progress(section_id, answers)
+    except Exception as e:
+        logger.error(f"Error updating section progress: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update progress: {str(e)}")
+
+@app.post("/assessment/score/{section_id}")
+def score_assessment_section(section_id: str, responses: Dict[str, Any]):
+    """Score specific assessment section"""
+    try:
+        return structured_assessment.calculate_section_score(section_id, responses)
+    except Exception as e:
+        logger.error(f"Error scoring assessment section: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to score section: {str(e)}")
+
+@app.get("/assessment/summary")
+def get_assessment_summary():
+    """Get complete assessment summary with all section results"""
+    try:
+        return assessment_dashboard.get_assessment_summary()
+    except Exception as e:
+        logger.error(f"Error getting assessment summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get summary: {str(e)}")
+
+@app.post("/chat/start")
+def start_chat_session(request: Dict[str, Any]):
+    """Start new chat session for risk mitigation"""
+    try:
+        assessment_id = request.get('assessment_id')
+        assessment_results = request.get('assessment_results', {})
+        
+        if not assessment_id:
+            raise HTTPException(status_code=400, detail="Assessment ID is required")
+        
+        session_id = risk_mitigation_chat.start_chat_session(assessment_id, assessment_results)
+        return {"session_id": session_id}
+    except Exception as e:
+        logger.error(f"Error starting chat session: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start chat: {str(e)}")
+
+@app.post("/chat/{session_id}/message")
+def send_chat_message(session_id: str, request: Dict[str, Any]):
+    """Send message to chat session"""
+    try:
+        user_message = request.get('message')
+        if not user_message:
+            raise HTTPException(status_code=400, detail="Message is required")
+        
+        response = risk_mitigation_chat.process_user_message(session_id, user_message)
+        return response
+    except Exception as e:
+        logger.error(f"Error processing chat message: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process message: {str(e)}")
+
+@app.get("/chat/{session_id}/history")
+def get_chat_history(session_id: str):
+    """Get chat session history"""
+    try:
+        return risk_mitigation_chat.get_session_history(session_id)
+    except Exception as e:
+        logger.error(f"Error getting chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get history: {str(e)}")
 
 def generate_dynamic_questions(profile: CompanyProfile) -> List[RiskQuestion]:
     """Generate a comprehensive set of risk assessment questions based on the company profile."""
@@ -284,34 +564,34 @@ def build_risk_table(profile: CompanyProfile, answers: Dict[str, str]) -> tuple[
     for cat_def in RISK_CATEGORIES_DEFINITION:
         answer_text = answers.get(cat_def['id'], "No answer provided")
         
-        # Basic scoring logic based on answer length and keywords
-        score = 0
-        if answer_text.lower() == "no answer provided":
-            score = 2  # Low score for no answer
-        elif len(answer_text) < 20:
-            score = 4  # Slightly higher for brief answer
-        elif len(answer_text) < 100:
-            score = 6  # Medium score for moderate answer
-        else:
-            score = 8  # Higher score for detailed answer
-        
-        # Adjust score based on positive/negative keywords
-        positive_keywords = ["strong", "comprehensive", "fully implemented", "excellent", "robust", 
-                            "mature", "advanced", "complete", "thorough", "effective"]
-        negative_keywords = ["weak", "lacking", "not implemented", "poor", "minimal", 
-                            "immature", "basic", "incomplete", "inadequate", "ineffective"]
-        
-        if any(kw in answer_text.lower() for kw in positive_keywords):
-            score = min(cat_def['max_score'], score + 2)
-        elif any(kw in answer_text.lower() for kw in negative_keywords):
-            score = max(0, score - 2)
+        # Use objective scoring with detailed justification
+        try:
+            score_justification = objective_scorer.calculate_objective_score(
+                cat_def['id'], answer_text, profile.dict()
+            )
+            score = score_justification.score
+            
+            # Create detailed explanation
+            explanation = f"Score: {score}/10 (Confidence: {score_justification.confidence:.2f}). "
+            explanation += f"Base score: {score_justification.base_score}, "
+            if score_justification.adjustments:
+                adjustments_text = ", ".join([f"{adj[0]}: {adj[1]:+d}" for adj in score_justification.adjustments])
+                explanation += f"Adjustments: {adjustments_text}. "
+            
+            if score_justification.evidence_found:
+                explanation += f"Evidence found: {', '.join(score_justification.evidence_found[:3])}. "
+            
+            if score_justification.recommendations:
+                explanation += f"Recommendation: {score_justification.recommendations[0]}"
+            
+        except Exception as e:
+            logger.warning(f"Objective scoring failed for {cat_def['id']}: {str(e)}, using fallback")
+            # Fallback to simple scoring
+            score = 2 if answer_text.lower() == "no answer provided" else min(8, max(2, len(answer_text) // 25))
+            explanation = f"Based on your response length and content. Assessment focused on {cat_def['scoring_focus']}."
         
         # Ensure score is within bounds
         score = max(0, min(cat_def['max_score'], score))
-        
-        # Generate explanation
-        explanation = f"Based on your response: '{answer_text[:100]}{'...' if len(answer_text) > 100 else ''}'. "
-        explanation += f"Assessment focused on {cat_def['scoring_focus']}."
         
         # Create table row
         table.append(RiskTableRow(

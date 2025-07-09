@@ -1,350 +1,339 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { NextPage } from 'next';
+import { useRouter } from 'next/router';
 
-// --- Type Definitions (align with backend api.py) ---
-interface CompanyProfile {
-  name?: string;
-  industry: string;
-  size: string;
-  tech_adoption: string;
-  security_controls: string;
-  risk_posture: string;
-  emerging_technologies: string[];
-}
-
-interface RiskQuestion {
+// --- Type Definitions ---
+interface DashboardCard {
   id: string;
-  question_text: string;
-  category_name: string;
-  helper_text?: string;
-  scoring_focus: string;
-}
-
-interface RiskAnswer {
-  question_id: string;
-  answer: string;
-}
-
-interface RiskTableRow {
-  id: string;
+  title: string;
+  description: string;
+  icon: string;
   category: string;
-  definition: string;
-  scoring_focus: string;
-  score: number;
-  max_score: number;
-  weight: number;
-  explanation: string;
+  route: string;
+  enabled: boolean;
+  badge?: string;
+  priority: string;
+  estimated_time?: string;
+  features: string[];
 }
 
-interface RiskAssessmentResult {
-  overall_weighted_score: number;
-  risk_table: RiskTableRow[];
-  recommendations: string[];
-  resources: { title: string; url: string }[];
-  data_insights: string[];
-  raw_llm_output?: string;
+interface DashboardProgress {
+  in_progress: boolean;
+  completed: boolean;
+  completion_percentage: number;
+  sections_completed: number;
+  total_sections: number;
+  estimated_time_remaining: string;
 }
 
-interface Message {
+interface QuickAction {
   id: string;
-  sender: 'user' | 'ai';
-  text?: string;
-  data?: RiskAssessmentResult; // Changed from any to RiskAssessmentResult | undefined (implicitly)
-  type: 'text' | 'question' | 'assessment_result' | 'error';
-  question_id?: string; // For AI questions
+  title: string;
+  description: string;
+  icon: string;
+  route: string;
+  primary: boolean;
+  enabled?: boolean;
 }
 
-const initialCompanyProfileQuestions = [
-  { id: 'industry', label: 'What is your company\'s industry?' },
-  { id: 'size', label: 'What is the size of your company (e.g., Startup, SME, Large Enterprise)?' },
-  { id: 'tech_adoption', label: 'How would you describe your company\'s typical level of technology adoption (e.g., Early Adopter, Mainstream, Laggard)?' },
-  { id: 'security_controls', label: 'Briefly describe your company\'s current security controls.' },
-  { id: 'risk_posture', label: 'Briefly describe your company\'s general risk posture.' },
-  { id: 'emerging_technologies', label: 'Which emerging technologies are you most interested in assessing (comma-separated, e.g., AI, Blockchain, Quantum Computing)?' },
-];
+interface DashboardData {
+  dashboard_info: {
+    title: string;
+    subtitle: string;
+    version: string;
+    description: string;
+  };
+  navigation_cards: DashboardCard[];
+  cards_by_category: { [key: string]: DashboardCard[] };
+  assessment_progress: DashboardProgress;
+  quick_actions: QuickAction[];
+  featured_frameworks: Array<{
+    name: string;
+    description: string;
+    coverage: string;
+    icon: string;
+  }>;
+}
 
-const ConversationalAssessmentPage: NextPage = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [userInput, setUserInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+const MainDashboard: NextPage = () => {
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const router = useRouter();
 
-  const [conversationState, setConversationState] = useState<'initial_greeting' | 'collecting_profile' | 'asking_risk_questions' | 'submitting_answers' | 'showing_results' | 'error_state'>('initial_greeting');
-  const [currentProfileQuestionIndex, setCurrentProfileQuestionIndex] = useState(0);
-  const [companyProfileData, setCompanyProfileData] = useState<Partial<CompanyProfile>>({});
-  const [riskQuestions, setRiskQuestions] = useState<RiskQuestion[]>([]);
-  const [currentRiskQuestionIndex, setCurrentRiskQuestionIndex] = useState(0);
-  const [riskAnswers, setRiskAnswers] = useState<RiskAnswer[]>([]);
-  
-  const chatEndRef = useRef<null | HTMLDivElement>(null);
-
-  const addMessage = useCallback((sender: 'user' | 'ai', text: string, type: Message['type'] = 'text', question_id?: string, data?: RiskAssessmentResult) => {
-    setMessages((prev: Message[]) => [...prev, { id: Date.now().toString() + Math.random().toString(), sender, text, type, question_id, data }]);
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
-  const addAiMessage = useCallback((text: string, type: Message['type'] = 'text', question_id?: string, helper_text?: string, data?: RiskAssessmentResult) => {
-    const fullText = helper_text ? `${text}\n\n*Helper: ${helper_text}*` : text;
-    addMessage('ai', fullText, type, question_id, data);
-  }, [addMessage]);
-
-  const submitCompanyProfile = useCallback(async () => {
-    setIsLoading(true);
-    addAiMessage("Thank you for the company details. Fetching relevant risk questions for you...");
+  const fetchDashboardData = async () => {
     try {
-      const profileToSend: CompanyProfile = {
-        industry: companyProfileData.industry || '',
-        size: companyProfileData.size || '',
-        tech_adoption: companyProfileData.tech_adoption || '',
-        security_controls: companyProfileData.security_controls || '',
-        risk_posture: companyProfileData.risk_posture || '',
-        emerging_technologies: (companyProfileData.emerging_technologies as string[] || []),
-        name: companyProfileData.name || 'Unnamed Company'
-      };
-      console.log("Submitting company profile:", profileToSend);
-
-      const res = await fetch('http://localhost:8000/initialize-assessment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileToSend),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ detail: `Server error: ${res.status}` }));
-        if (res.status === 503) {
-          addAiMessage("The AI service is still initializing. Please wait a moment and try again.", 'error');
-          setError("Service not ready. Please try again in a few moments.");
-        } else {
-          throw new Error(errorData.detail || `Server error: ${res.status}`);
-        }
-        setConversationState('error_state');
-        return;
+      setIsLoading(true);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch dashboard data: ${response.status}`);
       }
-
-      const fetchedQuestions: RiskQuestion[] = await res.json();
-      console.log("Fetched risk questions:", fetchedQuestions);
-      if (fetchedQuestions && fetchedQuestions.length > 0) {
-        setRiskQuestions(fetchedQuestions);
-        addAiMessage("Great! Now I have some specific questions to understand your risk posture better.");
-        setConversationState('asking_risk_questions');
-        setCurrentRiskQuestionIndex(0);
-      } else {
-        addAiMessage("No specific risk questions were generated. This might be due to a service issue.", 'error');
-        setError("Failed to generate assessment questions. Please try again.");
-        setConversationState('error_state');
-      }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-      addAiMessage(`Error fetching risk questions: ${errorMessage}. Please try again in a few moments.`, 'error');
-      setError(`Failed to initialize assessment: ${errorMessage}`);
-      setConversationState('error_state');
+      const data: DashboardData = await response.json();
+      setDashboardData(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [addAiMessage, companyProfileData]);
-
-  const submitRiskAnswers = useCallback(async () => {
-    setIsLoading(true);
-    console.log("Submitting riskAnswers:", riskAnswers);
-    console.log("Current riskQuestions:", riskQuestions);
-    try {
-      const res = await fetch('http://localhost:8000/submit-answers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: riskAnswers }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ detail: `Server error: ${res.status}` }));
-        if (res.status === 503) {
-          addAiMessage("The AI service is still initializing. Please wait a moment and try again.", 'error');
-          setError("Service not ready. Please try again in a few moments.");
-        } else {
-          throw new Error(errorData.detail || `Server error: ${res.status}`);
-        }
-        setConversationState('error_state');
-        return;
-      }
-
-      const resultData: RiskAssessmentResult = await res.json();
-      if (!resultData.recommendations || !resultData.risk_table) {
-        throw new Error("Received incomplete assessment result");
-      }
-      addAiMessage("Here is your risk assessment result:", 'assessment_result', undefined, undefined, resultData);
-      setConversationState('showing_results');
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-      addAiMessage(`Error submitting answers: ${errorMessage}. Please try again in a few moments.`, 'error');
-      setError(`Failed to get assessment: ${errorMessage}`);
-      setConversationState('error_state');
-    }
-    setIsLoading(false);
-  }, [addAiMessage, riskAnswers, riskQuestions]);
-
-  // Add a retry mechanism for error states
-  const handleRetry = useCallback(() => {
-    setError(null);
-    if (conversationState === 'error_state') {
-      if (currentProfileQuestionIndex >= initialCompanyProfileQuestions.length) {
-        submitCompanyProfile();
-      } else if (currentRiskQuestionIndex >= riskQuestions.length && riskQuestions.length > 0) {
-        submitRiskAnswers();
-      } else {
-        setConversationState('initial_greeting');
-      }
-    }
-  }, [conversationState, currentProfileQuestionIndex, currentRiskQuestionIndex, riskQuestions.length, submitCompanyProfile, submitRiskAnswers]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  useEffect(() => {
-    if (conversationState === 'initial_greeting') {
-      addAiMessage("Hello! I'm RiskIQ-AI, here to help you assess your company's risk profile for emerging technologies. Let's start by gathering some basic information about your company.");
-      setConversationState('collecting_profile');
-    }
-  }, [conversationState, addAiMessage]);
-
-  useEffect(() => {
-    if (conversationState === 'collecting_profile' && currentProfileQuestionIndex < initialCompanyProfileQuestions.length) {
-      const question = initialCompanyProfileQuestions[currentProfileQuestionIndex];
-      addAiMessage(question.label, 'question', question.id);
-    } else if (conversationState === 'collecting_profile' && currentProfileQuestionIndex >= initialCompanyProfileQuestions.length) {
-      submitCompanyProfile();
-    }
-  }, [conversationState, currentProfileQuestionIndex, addAiMessage, submitCompanyProfile]);
-
-  useEffect(() => {
-    if (conversationState === 'asking_risk_questions' && currentRiskQuestionIndex < riskQuestions.length) {
-      const question = riskQuestions[currentRiskQuestionIndex];
-      addAiMessage(question.question_text, 'question', question.id, question.helper_text);
-    } else if (conversationState === 'asking_risk_questions' && currentRiskQuestionIndex >= riskQuestions.length && riskQuestions.length > 0) {
-      addAiMessage("Thanks for answering all the questions! I'm now analyzing your responses to generate the risk assessment...");
-      setConversationState('submitting_answers');
-      submitRiskAnswers();
-    }
-  }, [conversationState, currentRiskQuestionIndex, riskQuestions, addAiMessage, submitRiskAnswers]);
-
-  const handleUserInput = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userInput.trim() || isLoading) return;
-
-    const userText = userInput;
-    addMessage('user', userText);
-    setUserInput('');
-    setIsLoading(true);
-    setError(null);
-
-    if (conversationState === 'collecting_profile') {
-      const currentQuestion = initialCompanyProfileQuestions[currentProfileQuestionIndex];
-      let value: string | string[] = userText;
-      if (currentQuestion.id === 'emerging_technologies') {
-        value = userText.split(',').map((s: string) => s.trim()).filter((s: string) => s);
-      }
-      setCompanyProfileData((prev: Partial<CompanyProfile>) => ({ ...prev, [currentQuestion.id]: value }));
-      setCurrentProfileQuestionIndex((prev: number) => prev + 1);
-    } else if (conversationState === 'asking_risk_questions') {
-      const currentQuestion = riskQuestions[currentRiskQuestionIndex];
-      setRiskAnswers((prev: RiskAnswer[]) => [...prev, { question_id: currentQuestion.id, answer: userText }]);
-      setCurrentRiskQuestionIndex((prev: number) => prev + 1);
-    }
-    setIsLoading(false);
   };
 
-  const renderMessageContent = (msg: Message) => {
-    if (msg.type === 'assessment_result' && msg.data) {
-      const result = msg.data; // Already typed as RiskAssessmentResult | undefined
-      return (
-        <div className="p-4 bg-gray-800 rounded-lg shadow-md my-2">
-          <h3 className="text-xl font-bold text-indigo-300 mb-3">Risk Assessment Summary</h3>
-          <p className="mb-2 text-lg"><strong>Overall Weighted Score:</strong> <span className={`font-bold ${result.overall_weighted_score < 50 ? 'text-red-400' : result.overall_weighted_score < 75 ? 'text-yellow-400' : 'text-green-400'}`}>{result.overall_weighted_score.toFixed(2)} / 100</span></p>
-          
-          <h4 className="text-lg font-semibold text-indigo-400 mt-4 mb-2">Risk Breakdown:</h4>
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-            {result.risk_table.map(row => (
-              <div key={row.id} className="p-3 bg-gray-700 rounded">
-                <p><strong>{row.category} (Weight: {(row.weight * 100).toFixed(0)}%):</strong> <span className={`font-semibold ${row.score < (row.max_score / 2) ? 'text-red-400' : row.score < (row.max_score * 0.75) ? 'text-yellow-400' : 'text-green-400'}`}>{row.score} / {row.max_score}</span></p>
-                <p className="text-sm text-gray-400"><em>{row.explanation}</em></p>
+  const handleCardClick = (route: string) => {
+    if (route === '/assessment/dashboard') {
+      router.push('/assessment');
+    } else if (route === '/chat') {
+      router.push('/chat');
+    } else {
+      // For now, show a coming soon message for other routes
+      alert(`${route} - Coming soon!`);
+    }
+  };
+
+  const handleQuickAction = (action: QuickAction) => {
+    if (!action.enabled && action.enabled !== undefined) {
+      return;
+    }
+    handleCardClick(action.route);
+  };
+
+  const getCardsByCategory = (category: string): DashboardCard[] => {
+    if (!dashboardData) return [];
+    if (category === 'all') return dashboardData.navigation_cards;
+    return dashboardData.cards_by_category[category] || [];
+  };
+
+  const getPriorityColor = (priority: string): string => {
+    switch (priority) {
+      case 'high': return 'border-red-500 bg-red-50';
+      case 'medium': return 'border-yellow-500 bg-yellow-50';
+      case 'low': return 'border-green-500 bg-green-50';
+      default: return 'border-gray-500 bg-gray-50';
+    }
+  };
+
+  const getCompletionColor = (percentage: number): string => {
+    if (percentage >= 100) return 'text-green-600';
+    if (percentage >= 50) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-400 mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading RiskAI Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 flex items-center justify-center">
+        <div className="text-center p-8 bg-red-900/50 rounded-lg max-w-md">
+          <h2 className="text-red-400 text-xl font-bold mb-2">Error Loading Dashboard</h2>
+          <p className="text-red-300 mb-4">{error}</p>
+          <button
+            onClick={fetchDashboardData}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dashboardData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 flex items-center justify-center">
+        <p className="text-white text-lg">No dashboard data available</p>
+      </div>
+    );
+  }
+
+  const categories = ['all', ...Object.keys(dashboardData.cards_by_category)];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 text-white">
+      {/* Header */}
+      <header className="p-6 bg-gray-900/80 backdrop-blur-md shadow-lg">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent mb-2">
+            {dashboardData.dashboard_info.title}
+          </h1>
+          <p className="text-gray-300 text-lg mb-4">{dashboardData.dashboard_info.subtitle}</p>
+          <p className="text-gray-400">{dashboardData.dashboard_info.description}</p>
+        </div>
+      </header>
+
+      {/* Assessment Progress Banner */}
+      {dashboardData.assessment_progress && (
+        <div className="bg-indigo-900/50 border-l-4 border-indigo-400 p-4 mx-6 mt-6 rounded-r-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-indigo-300 font-semibold">Assessment Progress</h3>
+              <p className="text-gray-300">
+                {dashboardData.assessment_progress.sections_completed} of {dashboardData.assessment_progress.total_sections} sections completed
+              </p>
+            </div>
+            <div className="text-right">
+              <div className={`text-2xl font-bold ${getCompletionColor(dashboardData.assessment_progress.completion_percentage)}`}>
+                {dashboardData.assessment_progress.completion_percentage.toFixed(0)}%
+              </div>
+              <div className="text-sm text-gray-400">
+                {dashboardData.assessment_progress.estimated_time_remaining} remaining
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {dashboardData.quick_actions.map((action) => (
+              <button
+                key={action.id}
+                onClick={() => handleQuickAction(action)}
+                disabled={action.enabled === false}
+                className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                  action.primary
+                    ? 'bg-indigo-600 border-indigo-500 hover:bg-indigo-700 text-white'
+                    : 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300'
+                } ${
+                  action.enabled === false ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                }`}
+              >
+                <div className="text-2xl mb-2">{action.icon}</div>
+                <h3 className="font-semibold mb-1">{action.title}</h3>
+                <p className="text-sm opacity-90">{action.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Category Filter */}
+      <div className="px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-wrap gap-2 mb-6">
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={`px-4 py-2 rounded-lg transition ${
+                  selectedCategory === category
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                {category === 'all' ? 'All Features' : category}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Dashboard Cards */}
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {getCardsByCategory(selectedCategory).map((card) => (
+              <div
+                key={card.id}
+                onClick={() => card.enabled && handleCardClick(card.route)}
+                className={`bg-gray-800 rounded-lg p-6 border-2 transition-all duration-200 cursor-pointer hover:bg-gray-700 ${getPriorityColor(card.priority)} ${
+                  !card.enabled ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="text-4xl">{card.icon}</div>
+                  <div className="flex flex-col items-end">
+                    {card.badge && (
+                      <span className="px-2 py-1 bg-indigo-600 text-white text-xs rounded-full mb-1">
+                        {card.badge}
+                      </span>
+                    )}
+                    <span className={`px-2 py-1 text-xs rounded ${
+                      card.priority === 'high' ? 'bg-red-600' : 
+                      card.priority === 'medium' ? 'bg-yellow-600' : 'bg-green-600'
+                    } text-white`}>
+                      {card.priority}
+                    </span>
+                  </div>
+                </div>
+                
+                <h3 className="text-xl font-bold mb-2 text-white">{card.title}</h3>
+                <p className="text-gray-300 mb-4">{card.description}</p>
+                
+                {card.estimated_time && (
+                  <div className="text-sm text-gray-400 mb-2">
+                    ⏱️ {card.estimated_time}
+                  </div>
+                )}
+                
+                <div className="text-sm text-gray-400 mb-3">
+                  📁 {card.category}
+                </div>
+                
+                {card.features && card.features.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Features:</h4>
+                    <ul className="text-sm text-gray-400 space-y-1">
+                      {card.features.slice(0, 3).map((feature, index) => (
+                        <li key={index} className="flex items-center">
+                          <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full mr-2"></span>
+                          {feature}
+                        </li>
+                      ))}
+                      {card.features.length > 3 && (
+                        <li className="text-gray-500">+{card.features.length - 3} more...</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
               </div>
             ))}
           </div>
-
-          <h4 className="text-lg font-semibold text-indigo-400 mt-4 mb-2">Recommendations:</h4>
-          <ul className="list-disc list-inside space-y-1 pl-4">
-            {result.recommendations.map((rec, i) => <li key={i}>{rec}</li>)}
-          </ul>
-
-          {result.resources && result.resources.length > 0 && (
-            <>
-              <h4 className="text-lg font-semibold text-indigo-400 mt-4 mb-2">Helpful Resources:</h4>
-              <ul className="list-disc list-inside space-y-1 pl-4">
-                {result.resources.map((res, i) => <li key={i}><a href={res.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{res.title}</a></li>)}
-              </ul>
-            </>
-          )}
         </div>
-      );
-    }
-    return msg.text?.split('\n').map((line, index) => (
-        <React.Fragment key={index}>
-            {line.startsWith('*Helper:') ? <em className="text-sm text-gray-400">{line}</em> : line}
-            {index < (msg.text?.split('\n').length || 0) - 1 && <br />}
-        </React.Fragment>
-    ));
-  };
+      </div>
 
-  return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-950 to-gray-900 text-white">
-      <header className="p-4 bg-gray-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-center bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent">
-          RiskIQ-AI Assessment
-        </h1>
-      </header>
-
-      <main className="flex-grow p-4 space-y-4 overflow-y-auto" style={{maxHeight: 'calc(100vh - 160px)'}}>
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xl lg:max-w-2xl px-4 py-3 rounded-2xl shadow-md ${msg.type === 'error' ? 'bg-red-900/50' : msg.sender === 'user' ? 'bg-indigo-600' : 'bg-gray-700'}`}>
-              {renderMessageContent(msg)}
-            </div>
+      {/* Featured Frameworks */}
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-2xl font-bold mb-4">Supported Frameworks</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {dashboardData.featured_frameworks.map((framework, index) => (
+              <div key={index} className="bg-gray-800 rounded-lg p-4 text-center">
+                <div className="text-3xl mb-2">{framework.icon}</div>
+                <h3 className="font-semibold text-white mb-1">{framework.name}</h3>
+                <p className="text-sm text-gray-400 mb-2">{framework.description}</p>
+                <span className="px-2 py-1 bg-indigo-600 text-white text-xs rounded">
+                  {framework.coverage}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-        <div ref={chatEndRef} />
-      </main>
+        </div>
+      </div>
 
-      <footer className="p-4 bg-gray-900/80 backdrop-blur-md sticky bottom-0 z-10">
-        {error && (
-          <div className="text-red-400 text-center mb-2 p-2 bg-red-900/50 rounded flex items-center justify-center gap-2">
-            <span>Error: {error}</span>
-            <button
-              onClick={handleRetry}
-              className="px-3 py-1 rounded bg-red-800 hover:bg-red-700 transition"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-        <form onSubmit={handleUserInput} className="flex gap-3">
-          <input
-            type="text"
-            value={userInput}
-            onChange={(e) => setUserInput(e.target.value)}
-            placeholder={isLoading ? "Thinking..." : (conversationState === 'collecting_profile' || conversationState === 'asking_risk_questions' ? "Type your answer..." : "Conversation ended.")}
-            className="flex-grow p-3 rounded-xl bg-gray-800 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition disabled:opacity-50"
-            disabled={isLoading || !['collecting_profile', 'asking_risk_questions'].includes(conversationState)}
-          />
-          <button
-            type="submit"
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold shadow-lg hover:from-indigo-600 hover:to-purple-700 transition disabled:opacity-50"
-            disabled={isLoading || !userInput.trim() || !['collecting_profile', 'asking_risk_questions'].includes(conversationState)}
-          >
-            Send
-          </button>
-        </form>
+      {/* Footer */}
+      <footer className="bg-gray-900/80 backdrop-blur-md mt-12 p-6">
+        <div className="max-w-7xl mx-auto text-center text-gray-400">
+          <p>RiskAI v{dashboardData.dashboard_info.version} - Professional Cybersecurity Risk Assessment Platform</p>
+        </div>
       </footer>
     </div>
   );
 };
 
-export default ConversationalAssessmentPage;
-
-
+export default MainDashboard;

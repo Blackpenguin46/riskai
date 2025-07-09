@@ -35,11 +35,19 @@ def load_existing_embeddings(embedder, persist_dir: str = "vectordb") -> Chroma:
             persist_directory=persist_dir,
             embedding_function=embedder
         )
-    except KeyError as e:
+    except (KeyError, Exception) as e:
         logger.warning(f"Chroma collection load failed: {e}. Rebuilding vector store from source documents.")
-        # Remove corrupted data
+        # Remove corrupted data files
         if os.path.isdir(persist_dir):
-            shutil.rmtree(persist_dir)
+            for filename in os.listdir(persist_dir):
+                filepath = os.path.join(persist_dir, filename)
+                try:
+                    if os.path.isfile(filepath):
+                        os.remove(filepath)
+                    elif os.path.isdir(filepath):
+                        shutil.rmtree(filepath)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to remove {filepath}: {cleanup_error}")
         # Rebuild from PDF source files
         docs_dir = os.getenv("PDF_DATA_DIR", "data/")
         docs = load_documents(docs_dir)
