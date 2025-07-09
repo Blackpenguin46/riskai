@@ -31,6 +31,6 @@ EXPOSE 8000
 # ENV NAME RiskIQ-AI-Backend
 
 # Command to run the application using Uvicorn
-# The RAG pipeline initialization is handled by the @app.on_event("startup") in api.py
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use PORT environment variable for Render deployment
+CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
