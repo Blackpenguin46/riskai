@@ -34,11 +34,18 @@ from benchmarks.grc_comparison import grc_benchmarker
 
 # --- Assessment redesign modules ---
 from assessment.structured_assessment import structured_assessment
+from assessment.modern_assessment import modern_assessment
 from assessment.dashboard import assessment_dashboard
 from chat.risk_mitigation_chat import risk_mitigation_chat
 
 # --- Main dashboard module ---
 from dashboard.main_dashboard import main_dashboard
+
+# File upload handling
+from fastapi import UploadFile, File, Form
+from typing import List as ListType
+import tempfile
+import os
 
 # ------------------------------------
 # Logging Configuration
@@ -74,33 +81,34 @@ qa_chain = None
 @app.on_event("startup")
 async def startup_event():
     global embedder, db, qa_chain
+    
+    # Get port from environment for Render
+    port = os.getenv("PORT", "8000")
+    logger.info(f"Starting RiskAI Backend on port {port}")
+    
     try:
-        logger.info("Initializing embedder...")
-        embedder = get_embedder()
-        if not embedder:
-            raise RuntimeError("Failed to initialize embedder")
-
-        logger.info("Initializing RAG pipeline...")
-        if os.path.exists(DB_PERSIST_DIR) and os.listdir(DB_PERSIST_DIR):
-            db = load_existing_embeddings(embedder, persist_dir=DB_PERSIST_DIR)
-        else:
-            docs = load_documents(PDF_DATA_DIR)
-            if not docs:
-                raise RuntimeError(f"No documents found in {PDF_DATA_DIR}")
-            chunks = chunk_documents(docs)
-            db = store_embeddings(chunks, embedder, persist_dir=DB_PERSIST_DIR)
-
-        if not db:
-            raise RuntimeError("Failed to initialize vector store")
-
-        qa_chain = build_rag_chain(db)
-        if not qa_chain:
-            raise RuntimeError("Failed to build QA chain")
+        # Initialize database
+        logger.info("Initializing database...")
+        from database.models import init_database
+        init_database()
+        
+        logger.info("Skipping embedder and RAG initialization for debugging...")
+        # Temporarily disabled for debugging
+        embedder = None
+        db = None
+        qa_chain = None
+        logger.info("All AI components skipped for debugging")
 
         logger.info("RAG pipeline initialized successfully")
+        logger.info(f"RiskAI Backend ready on port {port}")
     except Exception as e:
         logger.error(f"Failed to initialize RAG pipeline: {str(e)}")
         raise RuntimeError(f"Startup error: {str(e)}")
+
+@app.get("/health")
+def health_check():
+    """Simple health check endpoint"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 @app.get("/")
 def get_main_dashboard():
@@ -334,6 +342,15 @@ def get_metrics():
         logger.error(f"Error getting metrics: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
 
+@app.get("/metrics/dashboard/realtime")
+def get_realtime_dashboard():
+    """Get comprehensive real-time dashboard with advanced analytics"""
+    try:
+        return metrics_dashboard.get_real_time_dashboard()
+    except Exception as e:
+        logger.error(f"Error getting real-time dashboard: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get dashboard: {str(e)}")
+
 @app.get("/metrics/validate")
 def validate_system():
     """Validate system performance against thresholds"""
@@ -366,6 +383,93 @@ def create_company_workspace(profile: CompanyProfile):
         logger.error(f"Error creating company workspace: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create workspace: {str(e)}")
 
+@app.post("/company/upload-ai")
+async def upload_ai_document(
+    company_id: str = Form(...),
+    document_type: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """Upload document with AI-powered parsing and analysis"""
+    try:
+        # Validate file type
+        allowed_extensions = {'.pdf', '.docx', '.doc', '.txt', '.xlsx', '.xls', '.csv', '.json'}
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Unsupported file type: {file_extension}. Allowed: {', '.join(allowed_extensions)}"
+            )
+        
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Parse document with AI
+            from data_management.company_data import DocumentType
+            doc_type = DocumentType(document_type)
+            
+            parsing_result = company_data_manager.ai_parser.parse_document(temp_file_path, doc_type)
+            
+            # Store parsed results
+            storage_result = company_data_manager.store_parsed_document(company_id, parsing_result)
+            
+            return {
+                "status": "success",
+                "document_id": parsing_result.document_id,
+                "parsing_result": {
+                    "document_name": parsing_result.document_name,
+                    "document_type": parsing_result.document_type.value,
+                    "confidence_scores": parsing_result.confidence_scores,
+                    "security_topics": parsing_result.security_topics,
+                    "compliance_frameworks": parsing_result.compliance_frameworks,
+                    "risk_indicators": parsing_result.risk_indicators,
+                    "parsing_timestamp": parsing_result.parsing_timestamp.isoformat()
+                },
+                "storage_result": storage_result
+            }
+            
+        finally:
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+            
+    except Exception as e:
+        logger.error(f"Error in AI document upload: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
+
+@app.get("/company/{company_id}/parsing-results")
+def get_ai_parsing_results(company_id: str):
+    """Get AI document parsing results for a company"""
+    try:
+        results = company_data_manager.get_company_parsing_results(company_id)
+        return {"company_id": company_id, "parsing_results": results}
+    except Exception as e:
+        logger.error(f"Error getting parsing results: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get parsing results: {str(e)}")
+
+@app.post("/company/{company_id}/documents/analyze")
+def analyze_company_documents(company_id: str):
+    """Perform comprehensive analysis of all company documents"""
+    try:
+        analysis_result = company_data_manager.perform_comprehensive_analysis(company_id)
+        return analysis_result
+    except Exception as e:
+        logger.error(f"Error analyzing company documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze documents: {str(e)}")
+
+@app.get("/company/{company_id}/security-insights")
+def get_security_insights(company_id: str):
+    """Get AI-generated security insights from uploaded documents"""
+    try:
+        insights = company_data_manager.generate_security_insights(company_id)
+        return {"company_id": company_id, "security_insights": insights}
+    except Exception as e:
+        logger.error(f"Error getting security insights: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get insights: {str(e)}")
+
 @app.get("/scoring/guidance/{category_id}")
 def get_scoring_guidance(category_id: str):
     """Get objective scoring guidance for a category"""
@@ -375,6 +479,32 @@ def get_scoring_guidance(category_id: str):
     except Exception as e:
         logger.error(f"Error getting scoring guidance: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get guidance: {str(e)}")
+
+@app.post("/scoring/evidence-based")
+def generate_evidence_based_score(scoring_request: Dict[str, Any]):
+    """Generate evidence-based score with comprehensive justification"""
+    try:
+        category_id = scoring_request.get('category_id')
+        response = scoring_request.get('response')
+        question_metadata = scoring_request.get('metadata', {})
+        
+        if not category_id or not response:
+            raise HTTPException(
+                status_code=400, 
+                detail="Missing required fields: category_id and response"
+            )
+        
+        justification = objective_scorer.generate_evidence_based_justification(
+            category_id, 
+            response, 
+            question_metadata
+        )
+        
+        return justification
+        
+    except Exception as e:
+        logger.error(f"Error generating evidence-based score: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate score: {str(e)}")
 
 @app.get("/benchmarks/comparison")
 def get_benchmark_comparison():
@@ -394,6 +524,15 @@ def get_roi_analysis(company_size: str, assessment_frequency: Optional[int] = No
         logger.error(f"Error generating ROI analysis: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate ROI analysis: {str(e)}")
 
+@app.get("/benchmarks/realtime")
+def get_realtime_grc_comparison():
+    """Get real-time GRC platform comparison with current market data"""
+    try:
+        return grc_benchmarker.get_real_time_comparison()
+    except Exception as e:
+        logger.error(f"Error generating real-time comparison: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate real-time comparison: {str(e)}")
+
 @app.get("/assessment/dashboard")
 def get_assessment_dashboard():
     """Get unified dashboard with clickable section cards"""
@@ -403,9 +542,18 @@ def get_assessment_dashboard():
         logger.error(f"Error getting assessment dashboard: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get dashboard: {str(e)}")
 
+@app.get("/assessment/modern")
+def get_modern_assessment():
+    """Get modern test-based assessment overview"""
+    try:
+        return modern_assessment.get_assessment_overview()
+    except Exception as e:
+        logger.error(f"Error getting modern assessment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get assessment: {str(e)}")
+
 @app.get("/assessment/structured")
 def get_structured_assessment():
-    """Get structured assessment form based on industry frameworks"""
+    """Get structured assessment form based on industry frameworks (legacy)"""
     try:
         return structured_assessment.get_full_assessment()
     except Exception as e:
@@ -421,9 +569,27 @@ def get_assessment_section(section_id: str):
         logger.error(f"Error getting assessment section: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get section: {str(e)}")
 
+@app.get("/assessment/modern/section/{section_id}")
+def get_modern_assessment_section(section_id: str):
+    """Get modern assessment section with questions"""
+    try:
+        return modern_assessment.get_section_questions(section_id)
+    except Exception as e:
+        logger.error(f"Error getting modern assessment section: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get section: {str(e)}")
+
+@app.post("/assessment/modern/section/{section_id}/score")
+def score_modern_assessment_section(section_id: str, responses: Dict[str, Any]):
+    """Score modern assessment section with NIST CSF 2.0 methodology"""
+    try:
+        return modern_assessment.calculate_section_score(section_id, responses)
+    except Exception as e:
+        logger.error(f"Error scoring modern assessment section: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to score section: {str(e)}")
+
 @app.get("/assessment/section/{section_id}/questions")
 def get_section_questions(section_id: str):
-    """Get questions for specific assessment section"""
+    """Get questions for specific assessment section (legacy)"""
     try:
         section = structured_assessment.get_section(section_id)
         if not section:
@@ -830,3 +996,327 @@ Company Profile:
         ]
     
     return recommendations, resources, raw_llm_summary
+
+# --- Assessment Persistence Endpoints ---
+
+@app.post("/assessment/save")
+def save_assessment(assessment_data: Dict[str, Any]):
+    """Save complete assessment results"""
+    try:
+        from database.models import DatabaseManager
+        assessment_id = DatabaseManager.save_assessment_result(assessment_data)
+        return {"assessment_id": assessment_id, "message": "Assessment saved successfully"}
+    except Exception as e:
+        logger.error(f"Error saving assessment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save assessment: {str(e)}")
+
+@app.get("/assessment/load/{assessment_id}")
+def load_assessment(assessment_id: int):
+    """Load assessment results by ID"""
+    try:
+        from database.models import DatabaseManager
+        assessment_data = DatabaseManager.load_assessment_result(assessment_id)
+        if not assessment_data:
+            raise HTTPException(status_code=404, detail="Assessment not found")
+        return assessment_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading assessment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load assessment: {str(e)}")
+
+@app.get("/assessment/latest")
+def get_latest_assessment(company_id: Optional[int] = None):
+    """Get the most recent assessment"""
+    try:
+        from database.models import DatabaseManager
+        assessment_data = DatabaseManager.get_latest_assessment(company_id)
+        if not assessment_data:
+            return {"message": "No assessments found"}
+        return assessment_data
+    except Exception as e:
+        logger.error(f"Error getting latest assessment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get latest assessment: {str(e)}")
+
+@app.get("/assessments/list")
+def list_assessments(company_id: Optional[int] = None, limit: int = 10):
+    """List recent assessments"""
+    try:
+        from database.models import get_session, Assessment
+        db = get_session()
+        query = db.query(Assessment)
+        if company_id:
+            query = query.filter(Assessment.company_id == company_id)
+        
+        assessments = query.order_by(Assessment.created_at.desc()).limit(limit).all()
+        
+        result = []
+        for assessment in assessments:
+            result.append({
+                "id": assessment.id,
+                "name": assessment.name,
+                "status": assessment.status,
+                "completion_percentage": assessment.completion_percentage,
+                "overall_score": assessment.overall_score,
+                "created_at": assessment.created_at.isoformat(),
+                "completed_at": assessment.completed_at.isoformat() if assessment.completed_at else None
+            })
+        
+        db.close()
+        return {"assessments": result}
+    except Exception as e:
+        logger.error(f"Error listing assessments: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list assessments: {str(e)}")
+
+# --- Company Data Persistence Endpoints ---
+
+@app.post("/company/save")
+def save_company(company_data: Dict[str, Any]):
+    """Save company information"""
+    try:
+        from database.models import DatabaseManager
+        company_id = DatabaseManager.save_company_data(company_data)
+        return {"company_id": company_id, "message": "Company data saved successfully"}
+    except Exception as e:
+        logger.error(f"Error saving company data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save company data: {str(e)}")
+
+@app.get("/company/{company_id}")
+def get_company(company_id: int):
+    """Get company information"""
+    try:
+        from database.models import get_session, Company
+        db = get_session()
+        company = db.query(Company).filter(Company.id == company_id).first()
+        db.close()
+        
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        
+        return {
+            "id": company.id,
+            "name": company.name,
+            "industry": company.industry,
+            "size": company.size,
+            "country": company.country,
+            "settings": company.settings,
+            "contact_info": company.contact_info,
+            "compliance_requirements": company.compliance_requirements,
+            "created_at": company.created_at.isoformat(),
+            "updated_at": company.updated_at.isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting company data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get company data: {str(e)}")
+
+# --- System State Persistence ---
+
+@app.post("/system/state/save")
+def save_system_state(state_data: Dict[str, Any]):
+    """Save system state"""
+    try:
+        from database.models import DatabaseManager
+        for key, value in state_data.items():
+            DatabaseManager.save_system_state(key, value, f"System state: {key}")
+        return {"message": "System state saved successfully"}
+    except Exception as e:
+        logger.error(f"Error saving system state: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save system state: {str(e)}")
+
+@app.get("/system/state/{key}")
+def get_system_state(key: str):
+    """Get system state"""
+    try:
+        from database.models import DatabaseManager
+        value = DatabaseManager.get_system_state(key)
+        return {"key": key, "value": value}
+    except Exception as e:
+        logger.error(f"Error getting system state: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get system state: {str(e)}")
+
+# --- Data Backup and Export ---
+
+@app.get("/data/backup")
+def backup_data():
+    """Create backup of all assessment and company data"""
+    try:
+        from database.models import get_session, Assessment, Company, AssessmentResponse, SectionScore
+        import json
+        
+        db = get_session()
+        
+        # Backup assessments
+        assessments = db.query(Assessment).all()
+        assessments_data = []
+        for assessment in assessments:
+            # Get responses
+            responses = db.query(AssessmentResponse).filter(
+                AssessmentResponse.assessment_id == assessment.id
+            ).all()
+            
+            # Get section scores
+            section_scores = db.query(SectionScore).filter(
+                SectionScore.assessment_id == assessment.id
+            ).all()
+            
+            assessment_data = {
+                "id": assessment.id,
+                "company_id": assessment.company_id,
+                "name": assessment.name,
+                "description": assessment.description,
+                "status": assessment.status,
+                "completion_percentage": assessment.completion_percentage,
+                "sections_completed": assessment.sections_completed,
+                "overall_score": assessment.overall_score,
+                "maturity_level": assessment.maturity_level,
+                "risk_level": assessment.risk_level,
+                "created_at": assessment.created_at.isoformat(),
+                "completed_at": assessment.completed_at.isoformat() if assessment.completed_at else None,
+                "responses": [
+                    {
+                        "section_id": r.section_id,
+                        "question_id": r.question_id,
+                        "response_value": r.response_value,
+                        "answered_at": r.answered_at.isoformat()
+                    } for r in responses
+                ],
+                "section_scores": [
+                    {
+                        "section_id": s.section_id,
+                        "score": s.score,
+                        "maturity_level": s.maturity_level,
+                        "maturity_description": s.maturity_description,
+                        "questions_answered": s.questions_answered,
+                        "total_questions": s.total_questions,
+                        "completion_rate": s.completion_rate,
+                        "risk_breakdown": s.risk_breakdown,
+                        "recommendations": s.recommendations,
+                        "completed_at": s.completed_at.isoformat()
+                    } for s in section_scores
+                ]
+            }
+            assessments_data.append(assessment_data)
+        
+        # Backup companies
+        companies = db.query(Company).all()
+        companies_data = [
+            {
+                "id": c.id,
+                "name": c.name,
+                "industry": c.industry,
+                "size": c.size,
+                "country": c.country,
+                "settings": c.settings,
+                "contact_info": c.contact_info,
+                "compliance_requirements": c.compliance_requirements,
+                "created_at": c.created_at.isoformat(),
+                "updated_at": c.updated_at.isoformat()
+            } for c in companies
+        ]
+        
+        db.close()
+        
+        backup_data = {
+            "backup_date": datetime.utcnow().isoformat(),
+            "version": "2.0",
+            "assessments": assessments_data,
+            "companies": companies_data
+        }
+        
+        return backup_data
+        
+    except Exception as e:
+        logger.error(f"Error creating backup: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create backup: {str(e)}")
+
+@app.post("/data/restore")
+def restore_data(backup_data: Dict[str, Any]):
+    """Restore data from backup"""
+    try:
+        from database.models import get_session, Assessment, Company, AssessmentResponse, SectionScore
+        from datetime import datetime
+        
+        db = get_session()
+        
+        # Clear existing data (optional - you might want to make this configurable)
+        # db.query(AssessmentResponse).delete()
+        # db.query(SectionScore).delete()
+        # db.query(Assessment).delete()
+        # db.query(Company).delete()
+        
+        restored_assessments = 0
+        restored_companies = 0
+        
+        # Restore companies
+        for company_data in backup_data.get("companies", []):
+            company = Company(
+                name=company_data["name"],
+                industry=company_data.get("industry"),
+                size=company_data.get("size"),
+                country=company_data.get("country"),
+                settings=company_data.get("settings", {}),
+                contact_info=company_data.get("contact_info", {}),
+                compliance_requirements=company_data.get("compliance_requirements", {})
+            )
+            db.add(company)
+            restored_companies += 1
+        
+        # Restore assessments
+        for assessment_data in backup_data.get("assessments", []):
+            assessment = Assessment(
+                company_id=assessment_data.get("company_id"),
+                name=assessment_data["name"],
+                description=assessment_data.get("description"),
+                status=assessment_data.get("status", "completed"),
+                completion_percentage=assessment_data.get("completion_percentage", 0.0),
+                sections_completed=assessment_data.get("sections_completed", 0),
+                overall_score=assessment_data.get("overall_score"),
+                maturity_level=assessment_data.get("maturity_level"),
+                risk_level=assessment_data.get("risk_level")
+            )
+            db.add(assessment)
+            db.commit()
+            db.refresh(assessment)
+            
+            # Restore responses
+            for response_data in assessment_data.get("responses", []):
+                response = AssessmentResponse(
+                    assessment_id=assessment.id,
+                    section_id=response_data["section_id"],
+                    question_id=response_data["question_id"],
+                    response_value=response_data["response_value"]
+                )
+                db.add(response)
+            
+            # Restore section scores
+            for score_data in assessment_data.get("section_scores", []):
+                section_score = SectionScore(
+                    assessment_id=assessment.id,
+                    section_id=score_data["section_id"],
+                    score=score_data["score"],
+                    maturity_level=score_data.get("maturity_level"),
+                    maturity_description=score_data.get("maturity_description"),
+                    questions_answered=score_data.get("questions_answered", 0),
+                    total_questions=score_data.get("total_questions", 0),
+                    completion_rate=score_data.get("completion_rate", 0.0),
+                    risk_breakdown=score_data.get("risk_breakdown", {}),
+                    recommendations=score_data.get("recommendations", [])
+                )
+                db.add(section_score)
+            
+            restored_assessments += 1
+        
+        db.commit()
+        db.close()
+        
+        return {
+            "message": "Data restored successfully",
+            "restored_companies": restored_companies,
+            "restored_assessments": restored_assessments
+        }
+        
+    except Exception as e:
+        logger.error(f"Error restoring data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to restore data: {str(e)}")

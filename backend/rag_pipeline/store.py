@@ -33,7 +33,7 @@ def load_existing_embeddings(embedder, persist_dir: str = "vectordb") -> Chroma:
     try:
         return Chroma(
             persist_directory=persist_dir,
-            embedding_function=embedder
+            embedding=embedder
         )
     except (KeyError, Exception) as e:
         logger.warning(f"Chroma collection load failed: {e}. Rebuilding vector store from source documents.")
@@ -56,7 +56,7 @@ def load_existing_embeddings(embedder, persist_dir: str = "vectordb") -> Chroma:
         chunks = chunk_documents(docs)
         db = Chroma.from_documents(
             documents=chunks,
-            embedding_function=embedder,
+            embedding=embedder,
             persist_directory=persist_dir
         )
         db.persist()

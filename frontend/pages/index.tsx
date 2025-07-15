@@ -64,7 +64,53 @@ const MainDashboard: NextPage = () => {
 
   useEffect(() => {
     fetchDashboardData();
+    fetchAssessmentProgress();
   }, []);
+
+  const fetchAssessmentProgress = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/assessment/latest`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.status === 'in_progress') {
+          // Update dashboard data with real assessment progress
+          setDashboardData(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              assessment_progress: {
+                in_progress: true,
+                completed: false,
+                completion_percentage: data.completion_percentage || 0,
+                sections_completed: data.sections_completed || 0,
+                total_sections: 10, // Standard number of sections
+                estimated_time_remaining: calculateTimeRemaining(data.completion_percentage || 0)
+              },
+              quick_actions: prev.quick_actions.map(action => {
+                if (action.id === 'continue_assessment') {
+                  return { ...action, enabled: true };
+                }
+                return action;
+              })
+            };
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch assessment progress:', err);
+    }
+  };
+
+  const calculateTimeRemaining = (completionPercentage: number): string => {
+    const totalMinutes = 45; // Estimated total time for assessment
+    const remainingMinutes = Math.round((totalMinutes * (100 - completionPercentage)) / 100);
+    if (remainingMinutes <= 0) return "Almost done!";
+    if (remainingMinutes < 60) return `${remainingMinutes} min`;
+    const hours = Math.floor(remainingMinutes / 60);
+    const minutes = remainingMinutes % 60;
+    return `${hours}h ${minutes}m`;
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -88,9 +134,21 @@ const MainDashboard: NextPage = () => {
       router.push('/assessment');
     } else if (route === '/chat') {
       router.push('/chat');
+    } else if (route === '/metrics') {
+      router.push('/metrics');
+    } else if (route === '/benchmarks') {
+      router.push('/benchmarks');
+    } else if (route === '/company') {
+      router.push('/company');
+    } else if (route === '/scoring') {
+      router.push('/scoring');
+    } else if (route === '/reports') {
+      router.push('/reports');
+    } else if (route === '/settings') {
+      router.push('/settings');
     } else {
-      // For now, show a coming soon message for other routes
-      alert(`${route} - Coming soon!`);
+      // Fallback for unknown routes
+      router.push(route);
     }
   };
 
@@ -174,22 +232,30 @@ const MainDashboard: NextPage = () => {
       </header>
 
       {/* Assessment Progress Banner */}
-      {dashboardData.assessment_progress && (
+      {dashboardData.assessment_progress && dashboardData.assessment_progress.in_progress && (
         <div className="bg-indigo-900/50 border-l-4 border-indigo-400 p-4 mx-6 mt-6 rounded-r-lg">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-indigo-300 font-semibold">Assessment Progress</h3>
+              <h3 className="text-indigo-300 font-semibold">Assessment In Progress</h3>
               <p className="text-gray-300">
                 {dashboardData.assessment_progress.sections_completed} of {dashboardData.assessment_progress.total_sections} sections completed
               </p>
             </div>
-            <div className="text-right">
-              <div className={`text-2xl font-bold ${getCompletionColor(dashboardData.assessment_progress.completion_percentage)}`}>
-                {dashboardData.assessment_progress.completion_percentage.toFixed(0)}%
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className={`text-2xl font-bold ${getCompletionColor(dashboardData.assessment_progress.completion_percentage)}`}>
+                  {dashboardData.assessment_progress.completion_percentage.toFixed(0)}%
+                </div>
+                <div className="text-sm text-gray-400">
+                  {dashboardData.assessment_progress.estimated_time_remaining} remaining
+                </div>
               </div>
-              <div className="text-sm text-gray-400">
-                {dashboardData.assessment_progress.estimated_time_remaining} remaining
-              </div>
+              <button
+                onClick={() => router.push('/assessment')}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold transition"
+              >
+                Continue Assessment
+              </button>
             </div>
           </div>
         </div>
@@ -199,8 +265,8 @@ const MainDashboard: NextPage = () => {
       <div className="p-6">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {dashboardData.quick_actions.map((action) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {dashboardData.quick_actions.filter(action => action.id !== 'start_assessment').map((action) => (
               <button
                 key={action.id}
                 onClick={() => handleQuickAction(action)}
@@ -246,61 +312,78 @@ const MainDashboard: NextPage = () => {
       {/* Main Dashboard Cards */}
       <div className="p-6">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {getCardsByCategory(selectedCategory).map((card) => (
               <div
                 key={card.id}
                 onClick={() => card.enabled && handleCardClick(card.route)}
-                className={`bg-gray-800 rounded-lg p-6 border-2 transition-all duration-200 cursor-pointer hover:bg-gray-700 ${getPriorityColor(card.priority)} ${
+                className={`bg-gray-800/60 backdrop-blur-md rounded-xl p-8 border-2 transition-all duration-300 cursor-pointer hover:bg-gray-700/70 hover:scale-105 hover:shadow-2xl ${getPriorityColor(card.priority)} ${
                   !card.enabled ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="text-4xl">{card.icon}</div>
-                  <div className="flex flex-col items-end">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="text-5xl">{card.icon}</div>
+                  <div className="flex flex-col items-end gap-2">
                     {card.badge && (
-                      <span className="px-2 py-1 bg-indigo-600 text-white text-xs rounded-full mb-1">
+                      <span className="px-3 py-1 bg-indigo-600 text-white text-sm rounded-full font-medium">
                         {card.badge}
                       </span>
                     )}
-                    <span className={`px-2 py-1 text-xs rounded ${
-                      card.priority === 'high' ? 'bg-red-600' : 
-                      card.priority === 'medium' ? 'bg-yellow-600' : 'bg-green-600'
-                    } text-white`}>
-                      {card.priority}
+                    <span className={`px-3 py-1 text-sm rounded-full font-medium ${
+                      card.priority === 'high' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 
+                      card.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' : 
+                      'bg-green-500/20 text-green-300 border border-green-500/30'
+                    }`}>
+                      {card.priority} priority
                     </span>
                   </div>
                 </div>
                 
-                <h3 className="text-xl font-bold mb-2 text-white">{card.title}</h3>
-                <p className="text-gray-300 mb-4">{card.description}</p>
+                <h3 className="text-2xl font-bold mb-3 text-white">{card.title}</h3>
+                <p className="text-gray-300 mb-6 text-lg leading-relaxed">{card.description}</p>
                 
-                {card.estimated_time && (
-                  <div className="text-sm text-gray-400 mb-2">
-                    ⏱️ {card.estimated_time}
+                <div className="grid grid-cols-1 gap-4 mb-6">
+                  {card.estimated_time && (
+                    <div className="flex items-center text-gray-400 bg-gray-700/50 rounded-lg px-4 py-2">
+                      <span className="text-lg mr-3">⏱️</span>
+                      <span className="font-medium">{card.estimated_time}</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center text-gray-400 bg-gray-700/50 rounded-lg px-4 py-2">
+                    <span className="text-lg mr-3">📁</span>
+                    <span className="font-medium">{card.category}</span>
                   </div>
-                )}
-                
-                <div className="text-sm text-gray-400 mb-3">
-                  📁 {card.category}
                 </div>
                 
                 {card.features && card.features.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Features:</h4>
-                    <ul className="text-sm text-gray-400 space-y-1">
-                      {card.features.slice(0, 3).map((feature, index) => (
-                        <li key={index} className="flex items-center">
-                          <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full mr-2"></span>
-                          {feature}
+                  <div className="border-t border-gray-700 pt-6">
+                    <h4 className="text-lg font-semibold text-gray-300 mb-4 flex items-center">
+                      <span className="text-xl mr-2">✨</span>
+                      Key Features
+                    </h4>
+                    <ul className="text-gray-300 space-y-3">
+                      {card.features.slice(0, 4).map((feature, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="w-2 h-2 bg-indigo-400 rounded-full mr-3 mt-2 flex-shrink-0"></span>
+                          <span className="leading-relaxed">{feature}</span>
                         </li>
                       ))}
-                      {card.features.length > 3 && (
-                        <li className="text-gray-500">+{card.features.length - 3} more...</li>
+                      {card.features.length > 4 && (
+                        <li className="text-gray-500 italic">
+                          +{card.features.length - 4} additional features available
+                        </li>
                       )}
                     </ul>
                   </div>
                 )}
+                
+                <div className="mt-6 pt-4 border-t border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-400">Click to access</span>
+                    <span className="text-2xl">→</span>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

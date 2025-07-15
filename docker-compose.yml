@@ -8,9 +8,11 @@ services:
     volumes:
       - ./backend/data:/app/data      # your PDFs live here
       - ./backend/vectordb:/app/vectordb
+      - ./backend/database_data:/app/database_data  # SQLite database persistence
     environment:
       PDF_DATA_DIR: /app/data
       DB_PERSIST_DIR: /app/vectordb
+      DATABASE_DIR: /app/database_data
       PYTHONUNBUFFERED: "1"
     networks:
       - riskai_network
@@ -19,14 +21,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
     depends_on:
       - backend
     environment:
       NODE_ENV: production
-      # if you update your front-end to honor NEXT_PUBLIC_API_URL:
-      # NEXT_PUBLIC_API_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
     networks:
       - riskai_network
 

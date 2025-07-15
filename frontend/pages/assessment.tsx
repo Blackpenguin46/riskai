@@ -1,360 +1,724 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { NextPage } from 'next';
 import { useRouter } from 'next/router';
 
-// --- Type Definitions (align with backend api.py) ---
-interface CompanyProfile {
-  name?: string;
-  industry: string;
-  size: string;
-  tech_adoption: string;
-  security_controls: string;
-  risk_posture: string;
-  emerging_technologies: string[];
-}
-
-interface RiskQuestion {
+// --- Type Definitions for Modern Assessment ---
+interface AssessmentSection {
   id: string;
-  question_text: string;
-  category_name: string;
-  helper_text?: string;
-  scoring_focus: string;
-}
-
-interface RiskAnswer {
-  question_id: string;
-  answer: string;
-}
-
-interface RiskTableRow {
-  id: string;
-  category: string;
-  definition: string;
-  scoring_focus: string;
-  score: number;
-  max_score: number;
+  name: string;
+  description: string;
+  estimated_time: string;
+  question_count: number;
   weight: number;
-  explanation: string;
+  icon: string;
+  order: number;
 }
 
-interface RiskAssessmentResult {
-  overall_weighted_score: number;
-  risk_table: RiskTableRow[];
-  recommendations: string[];
-  resources: { title: string; url: string }[];
-  data_insights: string[];
-  raw_llm_output?: string;
-}
-
-interface Message {
+interface AssessmentQuestion {
   id: string;
-  sender: 'user' | 'ai';
-  text?: string;
-  data?: RiskAssessmentResult;
-  type: 'text' | 'question' | 'assessment_result' | 'error';
-  question_id?: string;
+  section_id: string;
+  section_name: string;
+  category: string;
+  question_text: string;
+  question_type: string;
+  options: string[];
+  required: boolean;
+  weight: number;
+  risk_impact: string;
+  help_text?: string;
+  maturity_indicators?: Record<string, string>;
 }
 
-const initialCompanyProfileQuestions = [
-  { id: 'industry', label: 'What is your company\'s industry?' },
-  { id: 'size', label: 'What is the size of your company (e.g., Startup, SME, Large Enterprise)?' },
-  { id: 'tech_adoption', label: 'How would you describe your company\'s typical level of technology adoption (e.g., Early Adopter, Mainstream, Laggard)?' },
-  { id: 'security_controls', label: 'Briefly describe your company\'s current security controls.' },
-  { id: 'risk_posture', label: 'Briefly describe your company\'s general risk posture.' },
-  { id: 'emerging_technologies', label: 'Which emerging technologies are you most interested in assessing (comma-separated, e.g., AI, Blockchain, Quantum Computing)?' },
-];
+interface AssessmentOverview {
+  assessment_info: {
+    title: string;
+    description: string;
+    total_sections: number;
+    total_questions: number;
+    estimated_time: string;
+    frameworks_covered: string[];
+  };
+  sections: AssessmentSection[];
+}
 
-const AssessmentPage: NextPage = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [userInput, setUserInput] = useState('');
+interface SectionResponse {
+  section: AssessmentSection;
+  questions: AssessmentQuestion[];
+  progress_info: {
+    current_section: number;
+    total_sections: number;
+    questions_in_section: number;
+  };
+}
+
+interface SectionScore {
+  section_id: string;
+  section_name: string;
+  score: number;
+  completion_rate: number;
+  maturity_level: string;
+  maturity_description: string;
+  questions_answered: number;
+  total_questions: number;
+  recommendations: string[];
+}
+
+const ModernAssessmentPage: NextPage = () => {
+  const [currentView, setCurrentView] = useState<'overview' | 'section' | 'results'>('overview');
+  const [assessmentOverview, setAssessmentOverview] = useState<AssessmentOverview | null>(null);
+  const [currentSection, setCurrentSection] = useState<SectionResponse | null>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [responses, setResponses] = useState<Record<string, Record<string, string | number>>>({});
+  const [sectionScores, setSectionScores] = useState<Record<string, SectionScore>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const router = useRouter();
 
-  const [conversationState, setConversationState] = useState<'initial_greeting' | 'collecting_profile' | 'asking_risk_questions' | 'submitting_answers' | 'showing_results' | 'error_state'>('initial_greeting');
-  const [currentProfileQuestionIndex, setCurrentProfileQuestionIndex] = useState(0);
-  const [companyProfileData, setCompanyProfileData] = useState<Partial<CompanyProfile>>({});
-  const [riskQuestions, setRiskQuestions] = useState<RiskQuestion[]>([]);
-  const [currentRiskQuestionIndex, setCurrentRiskQuestionIndex] = useState(0);
-  const [riskAnswers, setRiskAnswers] = useState<RiskAnswer[]>([]);
-  
-  const chatEndRef = useRef<null | HTMLDivElement>(null);
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const addMessage = useCallback((sender: 'user' | 'ai', text: string, type: Message['type'] = 'text', question_id?: string, data?: RiskAssessmentResult) => {
-    setMessages((prev: Message[]) => [...prev, { id: Date.now().toString() + Math.random().toString(), sender, text, type, question_id, data }]);
-  }, []);
+  const loadAssessmentOverview = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${apiUrl}/assessment/modern`);
+      if (!response.ok) throw new Error('Failed to load assessment');
+      const data = await response.json();
+      setAssessmentOverview(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load assessment');
+    }
+    setIsLoading(false);
+  }, [apiUrl]);
 
-  const addAiMessage = useCallback((text: string, type: Message['type'] = 'text', question_id?: string, helper_text?: string, data?: RiskAssessmentResult) => {
-    const fullText = helper_text ? `${text}\n\n*Helper: ${helper_text}*` : text;
-    addMessage('ai', fullText, type, question_id, data);
-  }, [addMessage]);
+  // Load assessment overview and check for existing assessment on component mount
+  useEffect(() => {
+    loadAssessmentOverview();
+    loadExistingAssessment();
+  }, [loadAssessmentOverview]);
 
-  const goBackToDashboard = () => {
-    router.push('/');
+  const loadExistingAssessment = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/assessment/latest`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'in_progress') {
+          // Load existing assessment data
+          setResponses(data.responses || {});
+          setSectionScores(data.section_scores || {});
+          console.log('Loaded existing assessment progress:', data);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load existing assessment:', err);
+    }
   };
 
-  const submitCompanyProfile = useCallback(async () => {
+  const loadSection = async (sectionId: string) => {
     setIsLoading(true);
-    addAiMessage("Thank you for the company details. Fetching relevant risk questions for you...");
     try {
-      const profileToSend: CompanyProfile = {
-        industry: companyProfileData.industry || '',
-        size: companyProfileData.size || '',
-        tech_adoption: companyProfileData.tech_adoption || '',
-        security_controls: companyProfileData.security_controls || '',
-        risk_posture: companyProfileData.risk_posture || '',
-        emerging_technologies: (companyProfileData.emerging_technologies as string[] || []),
-        name: companyProfileData.name || 'Unnamed Company'
+      const response = await fetch(`${apiUrl}/assessment/modern/section/${sectionId}`);
+      if (!response.ok) throw new Error('Failed to load section');
+      const data = await response.json();
+      setCurrentSection(data);
+      setCurrentQuestionIndex(0);
+      setCurrentView('section');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load section');
+    }
+    setIsLoading(false);
+  };
+
+  const handleQuestionResponse = (questionId: string, value: string | number) => {
+    const sectionId = currentSection?.section.id;
+    if (!sectionId) return;
+
+    setResponses(prev => {
+      const newResponses = {
+        ...prev,
+        [sectionId]: {
+          ...prev[sectionId],
+          [questionId]: value
+        }
+      };
+      
+      // Auto-save progress after each response
+      saveQuestionProgress(newResponses);
+      
+      return newResponses;
+    });
+  };
+
+  const saveQuestionProgress = async (currentResponses: Record<string, Record<string, string | number>>) => {
+    try {
+      setIsSaving(true);
+      const totalQuestions = assessmentOverview?.assessment_info.total_questions || 127;
+      const answeredQuestions = Object.values(currentResponses).reduce((total, sectionResponses) => 
+        total + Object.keys(sectionResponses).length, 0
+      );
+      const completionPercentage = (answeredQuestions / totalQuestions) * 100;
+
+      const assessmentData = {
+        name: `Security Assessment ${new Date().toLocaleDateString()}`,
+        description: "RiskAI Security Assessment - In Progress",
+        status: "in_progress",
+        completion_percentage: completionPercentage,
+        sections_completed: Object.keys(sectionScores).length,
+        questions_answered: answeredQuestions,
+        total_questions: totalQuestions,
+        responses: currentResponses,
+        section_scores: sectionScores,
+        completed: false
       };
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/initialize-assessment`, {
+      const response = await fetch(`${apiUrl}/assessment/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileToSend),
+        body: JSON.stringify(assessmentData)
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ detail: `Server error: ${res.status}` }));
-        if (res.status === 503) {
-          addAiMessage("The AI service is still initializing. Please wait a moment and try again.", 'error');
-          setError("Service not ready. Please try again in a few moments.");
-        } else {
-          throw new Error(errorData.detail || `Server error: ${res.status}`);
-        }
-        setConversationState('error_state');
-        return;
+      if (response.ok) {
+        setLastSaved(new Date());
+        console.log('Assessment progress saved successfully');
       }
-
-      const fetchedQuestions: RiskQuestion[] = await res.json();
-      if (fetchedQuestions && fetchedQuestions.length > 0) {
-        setRiskQuestions(fetchedQuestions);
-        addAiMessage("Great! Now I have some specific questions to understand your risk posture better.");
-        setConversationState('asking_risk_questions');
-        setCurrentRiskQuestionIndex(0);
-      } else {
-        addAiMessage("No specific risk questions were generated. This might be due to a service issue.", 'error');
-        setError("Failed to generate assessment questions. Please try again.");
-        setConversationState('error_state');
-      }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-      addAiMessage(`Error fetching risk questions: ${errorMessage}. Please try again in a few moments.`, 'error');
-      setError(`Failed to initialize assessment: ${errorMessage}`);
-      setConversationState('error_state');
+    } catch (err) {
+      console.error('Failed to save question progress:', err);
+    } finally {
+      setIsSaving(false);
     }
-    setIsLoading(false);
-  }, [addAiMessage, companyProfileData]);
+  };
 
-  const submitRiskAnswers = useCallback(async () => {
+  const saveAssessmentProgress = async (sectionScores: Record<string, SectionScore>) => {
+    try {
+      const assessmentData = {
+        name: `Security Assessment ${new Date().toLocaleDateString()}`,
+        description: "RiskAI Security Assessment - In Progress",
+        status: "in_progress",
+        completion_percentage: calculateCompletionPercentage(sectionScores),
+        sections_completed: Object.keys(sectionScores).length,
+        responses: responses,
+        section_scores: sectionScores,
+        completed: false
+      };
+
+      await fetch(`${apiUrl}/assessment/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assessmentData)
+      });
+    } catch (err) {
+      console.error('Failed to save assessment progress:', err);
+    }
+  };
+
+  const saveAssessmentFinal = async () => {
+    try {
+      const overallScore = calculateOverallScore();
+      const maturityLevel = determineMaturityLevel(overallScore);
+      
+      const assessmentData = {
+        name: `Security Assessment ${new Date().toLocaleDateString()}`,
+        description: "RiskAI Security Assessment - Completed",
+        status: "completed",
+        completion_percentage: 100,
+        sections_completed: Object.keys(sectionScores).length,
+        overall_score: overallScore,
+        maturity_level: maturityLevel,
+        risk_level: determineRiskLevel(overallScore),
+        responses: responses,
+        section_scores: sectionScores,
+        completed: true
+      };
+
+      const response = await fetch(`${apiUrl}/assessment/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assessmentData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Assessment saved successfully:', result);
+      }
+    } catch (err) {
+      console.error('Failed to save final assessment:', err);
+    }
+  };
+
+  const calculateCompletionPercentage = (sectionScores: Record<string, SectionScore>) => {
+    const totalSections = assessmentOverview?.sections.length || 10;
+    return (Object.keys(sectionScores).length / totalSections) * 100;
+  };
+
+  const calculateOverallScore = () => {
+    const completedSections = Object.values(sectionScores);
+    if (completedSections.length === 0) return 0;
+    return completedSections.reduce((sum, section) => sum + section.score, 0) / completedSections.length;
+  };
+
+  const determineMaturityLevel = (score: number) => {
+    if (score >= 85) return "Adaptive";
+    if (score >= 70) return "Repeatable";
+    if (score >= 50) return "Risk-Informed";
+    return "Partial";
+  };
+
+  const determineRiskLevel = (score: number) => {
+    if (score >= 80) return "Low";
+    if (score >= 60) return "Medium";
+    if (score >= 40) return "High";
+    return "Critical";
+  };
+
+  const createNewAssessment = async () => {
+    try {
+      // First, save the current assessment as completed if it has any progress
+      if (Object.keys(responses).length > 0 || Object.keys(sectionScores).length > 0) {
+        await saveAssessmentFinal();
+      }
+      
+      // Clear current assessment state
+      setCurrentView('overview');
+      setResponses({});
+      setSectionScores({});
+      setCurrentSection(null);
+      setCurrentQuestionIndex(0);
+      
+      console.log('New assessment created, previous assessment saved to history');
+    } catch (err) {
+      console.error('Failed to create new assessment:', err);
+    }
+  };
+
+  const submitSection = async () => {
+    if (!currentSection) return;
+    
+    const sectionId = currentSection.section.id;
+    const sectionResponses = responses[sectionId] || {};
+    
     setIsLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/submit-answers`, {
+      const response = await fetch(`${apiUrl}/assessment/modern/section/${sectionId}/score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: riskAnswers }),
+        body: JSON.stringify(sectionResponses)
       });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ detail: `Server error: ${res.status}` }));
-        if (res.status === 503) {
-          addAiMessage("The AI service is still initializing. Please wait a moment and try again.", 'error');
-          setError("Service not ready. Please try again in a few moments.");
-        } else {
-          throw new Error(errorData.detail || `Server error: ${res.status}`);
-        }
-        setConversationState('error_state');
-        return;
-      }
-
-      const resultData: RiskAssessmentResult = await res.json();
-      if (!resultData.recommendations || !resultData.risk_table) {
-        throw new Error("Received incomplete assessment result");
-      }
-      addAiMessage("Here is your risk assessment result:", 'assessment_result', undefined, undefined, resultData);
-      setConversationState('showing_results');
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-      addAiMessage(`Error submitting answers: ${errorMessage}. Please try again in a few moments.`, 'error');
-      setError(`Failed to get assessment: ${errorMessage}`);
-      setConversationState('error_state');
-    }
-    setIsLoading(false);
-  }, [addAiMessage, riskAnswers]);
-
-  const handleRetry = useCallback(() => {
-    setError(null);
-    if (conversationState === 'error_state') {
-      if (currentProfileQuestionIndex >= initialCompanyProfileQuestions.length) {
-        submitCompanyProfile();
-      } else if (currentRiskQuestionIndex >= riskQuestions.length && riskQuestions.length > 0) {
-        submitRiskAnswers();
+      
+      if (!response.ok) throw new Error('Failed to score section');
+      const scoreData = await response.json();
+      
+      setSectionScores(prev => {
+        const newSectionScores = {
+          ...prev,
+          [sectionId]: scoreData
+        };
+        
+        // Save assessment progress after updating section scores
+        saveAssessmentProgress(newSectionScores);
+        
+        return newSectionScores;
+      });
+      
+      // Move to next section or results
+      const nextSectionIndex = currentSection.section.order;
+      const nextSection = assessmentOverview?.sections.find(s => s.order === nextSectionIndex + 1);
+      
+      if (nextSection) {
+        loadSection(nextSection.id);
       } else {
-        setConversationState('initial_greeting');
+        // Assessment completed - save final results
+        setCurrentView('results');
+        saveAssessmentFinal();
       }
-    }
-  }, [conversationState, currentProfileQuestionIndex, currentRiskQuestionIndex, riskQuestions.length, submitCompanyProfile, submitRiskAnswers]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  useEffect(() => {
-    if (conversationState === 'initial_greeting') {
-      addAiMessage("Hello! I'm RiskIQ-AI, here to help you assess your company's risk profile for emerging technologies. Let's start by gathering some basic information about your company.");
-      setConversationState('collecting_profile');
-    }
-  }, [conversationState, addAiMessage]);
-
-  useEffect(() => {
-    if (conversationState === 'collecting_profile' && currentProfileQuestionIndex < initialCompanyProfileQuestions.length) {
-      const question = initialCompanyProfileQuestions[currentProfileQuestionIndex];
-      addAiMessage(question.label, 'question', question.id);
-    } else if (conversationState === 'collecting_profile' && currentProfileQuestionIndex >= initialCompanyProfileQuestions.length) {
-      submitCompanyProfile();
-    }
-  }, [conversationState, currentProfileQuestionIndex, addAiMessage, submitCompanyProfile]);
-
-  useEffect(() => {
-    if (conversationState === 'asking_risk_questions' && currentRiskQuestionIndex < riskQuestions.length) {
-      const question = riskQuestions[currentRiskQuestionIndex];
-      addAiMessage(question.question_text, 'question', question.id, question.helper_text);
-    } else if (conversationState === 'asking_risk_questions' && currentRiskQuestionIndex >= riskQuestions.length && riskQuestions.length > 0) {
-      addAiMessage("Thanks for answering all the questions! I'm now analyzing your responses to generate the risk assessment...");
-      setConversationState('submitting_answers');
-      submitRiskAnswers();
-    }
-  }, [conversationState, currentRiskQuestionIndex, riskQuestions, addAiMessage, submitRiskAnswers]);
-
-  const handleUserInput = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userInput.trim() || isLoading) return;
-
-    const userText = userInput;
-    addMessage('user', userText);
-    setUserInput('');
-    setIsLoading(true);
-    setError(null);
-
-    if (conversationState === 'collecting_profile') {
-      const currentQuestion = initialCompanyProfileQuestions[currentProfileQuestionIndex];
-      let value: string | string[] = userText;
-      if (currentQuestion.id === 'emerging_technologies') {
-        value = userText.split(',').map((s: string) => s.trim()).filter((s: string) => s);
-      }
-      setCompanyProfileData((prev: Partial<CompanyProfile>) => ({ ...prev, [currentQuestion.id]: value }));
-      setCurrentProfileQuestionIndex((prev: number) => prev + 1);
-    } else if (conversationState === 'asking_risk_questions') {
-      const currentQuestion = riskQuestions[currentRiskQuestionIndex];
-      setRiskAnswers((prev: RiskAnswer[]) => [...prev, { question_id: currentQuestion.id, answer: userText }]);
-      setCurrentRiskQuestionIndex((prev: number) => prev + 1);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit section');
     }
     setIsLoading(false);
   };
 
-  const renderMessageContent = (msg: Message) => {
-    if (msg.type === 'assessment_result' && msg.data) {
-      const result = msg.data;
-      return (
-        <div className="p-4 bg-gray-800 rounded-lg shadow-md my-2">
-          <h3 className="text-xl font-bold text-indigo-300 mb-3">Risk Assessment Summary</h3>
-          <p className="mb-2 text-lg"><strong>Overall Weighted Score:</strong> <span className={`font-bold ${result.overall_weighted_score < 50 ? 'text-red-400' : result.overall_weighted_score < 75 ? 'text-yellow-400' : 'text-green-400'}`}>{result.overall_weighted_score.toFixed(2)} / 100</span></p>
+  const renderOverview = () => {
+    if (!assessmentOverview) return null;
+
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-indigo-400 mb-4">
+            {assessmentOverview.assessment_info.title}
+          </h1>
+          <p className="text-gray-300 text-lg mb-6">
+            {assessmentOverview.assessment_info.description}
+          </p>
           
-          <h4 className="text-lg font-semibold text-indigo-400 mt-4 mb-2">Risk Breakdown:</h4>
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-            {result.risk_table.map(row => (
-              <div key={row.id} className="p-3 bg-gray-700 rounded">
-                <p><strong>{row.category} (Weight: {(row.weight * 100).toFixed(0)}%):</strong> <span className={`font-semibold ${row.score < (row.max_score / 2) ? 'text-red-400' : row.score < (row.max_score * 0.75) ? 'text-yellow-400' : 'text-green-400'}`}>{row.score} / {row.max_score}</span></p>
-                <p className="text-sm text-gray-400"><em>{row.explanation}</em></p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-gray-800 rounded-lg p-4">
+              <div className="text-2xl font-bold text-indigo-400">
+                {assessmentOverview.assessment_info.total_sections}
               </div>
-            ))}
+              <div className="text-sm text-gray-400">Sections</div>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-4">
+              <div className="text-2xl font-bold text-indigo-400">
+                {assessmentOverview.assessment_info.total_questions}
+              </div>
+              <div className="text-sm text-gray-400">Questions</div>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-4">
+              <div className="text-2xl font-bold text-indigo-400">
+                {assessmentOverview.assessment_info.estimated_time}
+              </div>
+              <div className="text-sm text-gray-400">Est. Time</div>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-4">
+              <div className="text-2xl font-bold text-indigo-400">
+                {assessmentOverview.assessment_info.frameworks_covered.length}
+              </div>
+              <div className="text-sm text-gray-400">Frameworks</div>
+            </div>
           </div>
+        </div>
 
-          <h4 className="text-lg font-semibold text-indigo-400 mt-4 mb-2">Recommendations:</h4>
-          <ul className="list-disc list-inside space-y-1 pl-4">
-            {result.recommendations.map((rec, i) => <li key={i}>{rec}</li>)}
-          </ul>
+        <div className="grid gap-4 mb-8">
+          {assessmentOverview.sections.map((section) => (
+            <div
+              key={section.id}
+              className="bg-gray-800 rounded-lg p-6 hover:bg-gray-750 transition-colors cursor-pointer"
+              onClick={() => loadSection(section.id)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="text-2xl">{section.icon}</div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">
+                      {section.name}
+                    </h3>
+                    <p className="text-gray-400 text-sm">{section.description}</p>
+                    <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                      <span>{section.question_count} questions</span>
+                      <span>{section.estimated_time}</span>
+                      <span>Weight: {(section.weight * 100).toFixed(0)}%</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {sectionScores[section.id] && (
+                    <div className="bg-green-600 text-white px-3 py-1 rounded text-sm">
+                      ✓ Complete
+                    </div>
+                  )}
+                  <div className="text-indigo-400">→</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
 
-          {result.resources && result.resources.length > 0 && (
-            <>
-              <h4 className="text-lg font-semibold text-indigo-400 mt-4 mb-2">Helpful Resources:</h4>
-              <ul className="list-disc list-inside space-y-1 pl-4">
-                {result.resources.map((res, i) => <li key={i}><a href={res.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{res.title}</a></li>)}
-              </ul>
-            </>
+        {Object.keys(sectionScores).length > 0 && (
+          <div className="text-center">
+            <button
+              onClick={() => setCurrentView('results')}
+              className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-8 py-3 rounded-lg font-semibold hover:from-indigo-600 hover:to-purple-700 transition"
+            >
+              View Results
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSection = () => {
+    if (!currentSection) return null;
+
+    const currentQuestion = currentSection.questions[currentQuestionIndex];
+    if (!currentQuestion) return null;
+
+    const sectionResponses = responses[currentSection.section.id] || {};
+    const currentResponse = sectionResponses[currentQuestion.id];
+
+    return (
+      <div className="max-w-3xl mx-auto p-6">
+        {/* Progress bar */}
+        <div className="mb-8">
+          <div className="flex justify-between text-sm text-gray-400 mb-2">
+            <span>{currentSection.section.name}</span>
+            <span>
+              {currentQuestionIndex + 1} of {currentSection.questions.length}
+            </span>
+          </div>
+          <div className="w-full bg-gray-700 rounded-full h-2 mb-3">
+            <div
+              className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2 rounded-full transition-all"
+              style={{
+                width: `${((currentQuestionIndex + 1) / currentSection.questions.length) * 100}%`
+              }}
+            />
+          </div>
+          
+          {/* Saving indicator */}
+          <div className="flex items-center justify-center">
+            {isSaving ? (
+              <div className="flex items-center text-yellow-400 text-sm">
+                <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" strokeOpacity="0.3"/>
+                  <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+                Saving your answer...
+              </div>
+            ) : lastSaved && (
+              <div className="flex items-center text-green-400 text-sm">
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Saved {lastSaved.toLocaleTimeString()}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Question */}
+        <div className="bg-gray-800 rounded-lg p-8 mb-6">
+          <h2 className="text-xl font-semibold text-white mb-4">
+            {currentQuestion.question_text}
+          </h2>
+          
+          {currentQuestion.help_text && (
+            <p className="text-gray-400 text-sm mb-6">
+              💡 {currentQuestion.help_text}
+            </p>
+          )}
+
+          {/* Response options based on question type */}
+          {currentQuestion.question_type === 'likert_scale' && (
+            <div className="space-y-3">
+              {currentQuestion.options.map((option, index) => (
+                <label
+                  key={index}
+                  className="flex items-center gap-3 p-4 bg-gray-700 rounded-lg hover:bg-gray-600 cursor-pointer transition"
+                >
+                  <input
+                    type="radio"
+                    name={currentQuestion.id}
+                    value={index + 1}
+                    checked={currentResponse === (index + 1)}
+                    onChange={(e) => handleQuestionResponse(currentQuestion.id, parseInt(e.target.value))}
+                    className="text-indigo-500"
+                  />
+                  <span className="text-white">{option}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {currentQuestion.question_type === 'dropdown' && (
+            <select
+              value={currentResponse || ''}
+              onChange={(e) => handleQuestionResponse(currentQuestion.id, e.target.value)}
+              className="w-full p-4 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Select an option...</option>
+              {currentQuestion.options.map((option, index) => (
+                <option key={index} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {currentQuestion.question_type === 'multiple_choice' && (
+            <div className="space-y-3">
+              {currentQuestion.options.map((option, index) => (
+                <label
+                  key={index}
+                  className="flex items-center gap-3 p-4 bg-gray-700 rounded-lg hover:bg-gray-600 cursor-pointer transition"
+                >
+                  <input
+                    type="radio"
+                    name={currentQuestion.id}
+                    value={option}
+                    checked={currentResponse === option}
+                    onChange={(e) => handleQuestionResponse(currentQuestion.id, e.target.value)}
+                    className="text-indigo-500"
+                  />
+                  <span className="text-white">{option}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {currentQuestion.question_type === 'short_text' && (
+            <textarea
+              value={currentResponse || ''}
+              onChange={(e) => handleQuestionResponse(currentQuestion.id, e.target.value)}
+              placeholder="Enter your response..."
+              className="w-full p-4 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+              rows={4}
+            />
           )}
         </div>
-      );
-    }
-    return msg.text?.split('\n').map((line, index) => (
-        <React.Fragment key={index}>
-            {line.startsWith('*Helper:') ? <em className="text-sm text-gray-400">{line}</em> : line}
-            {index < (msg.text?.split('\n').length || 0) - 1 && <br />}
-        </React.Fragment>
-    ));
+
+        {/* Navigation */}
+        <div className="flex justify-between">
+          <button
+            onClick={() => {
+              if (currentQuestionIndex > 0) {
+                setCurrentQuestionIndex(currentQuestionIndex - 1);
+              } else {
+                setCurrentView('overview');
+              }
+            }}
+            className="px-6 py-3 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition"
+          >
+            {currentQuestionIndex === 0 ? 'Back to Overview' : 'Previous'}
+          </button>
+
+          <button
+            onClick={() => {
+              if (currentQuestionIndex < currentSection.questions.length - 1) {
+                setCurrentQuestionIndex(currentQuestionIndex + 1);
+              } else {
+                submitSection();
+              }
+            }}
+            disabled={!currentResponse && currentQuestion.required}
+            className="px-6 py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold hover:from-indigo-600 hover:to-purple-700 transition disabled:opacity-50"
+          >
+            {currentQuestionIndex < currentSection.questions.length - 1 ? 'Next' : 'Complete Section'}
+          </button>
+        </div>
+      </div>
+    );
   };
 
-  return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-950 to-gray-900 text-white">
-      <header className="p-4 bg-gray-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
-        <div className="flex items-center justify-between">
+  const renderResults = () => {
+    const completedSections = Object.values(sectionScores);
+    if (completedSections.length === 0) return null;
+
+    const overallScore = completedSections.reduce((sum, section) => sum + section.score, 0) / completedSections.length;
+
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-indigo-400 mb-4">
+            Assessment Results
+          </h1>
+          <div className="bg-gray-800 rounded-lg p-8 mb-8">
+            <div className="text-4xl font-bold text-white mb-2">
+              {overallScore.toFixed(1)}%
+            </div>
+            <div className="text-gray-400">Overall Security Maturity Score</div>
+          </div>
+        </div>
+
+        <div className="grid gap-6 mb-8">
+          {completedSections.map((section) => (
+            <div key={section.section_id} className="bg-gray-800 rounded-lg p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-lg font-semibold text-white">
+                  {section.section_name}
+                </h3>
+                <div className="text-right">
+                  <div className="text-xl font-bold text-indigo-400">
+                    {section.score.toFixed(1)}%
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    {section.maturity_level}
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-gray-300 text-sm mb-4">
+                {section.maturity_description}
+              </p>
+
+              {section.recommendations.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-indigo-400 mb-2">
+                    Recommendations:
+                  </h4>
+                  <ul className="text-sm text-gray-300 space-y-1">
+                    {section.recommendations.map((rec, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <span className="text-indigo-400">•</span>
+                        {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="text-center space-y-4">
           <button
-            onClick={goBackToDashboard}
+            onClick={createNewAssessment}
+            className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-8 py-3 rounded-lg font-semibold hover:from-indigo-600 hover:to-purple-700 transition"
+          >
+            Start New Assessment
+          </button>
+          <div>
+            <button
+              onClick={() => router.push('/')}
+              className="text-indigo-400 hover:text-indigo-300 transition"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-950 to-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-400 mx-auto mb-4"></div>
+          <div className="text-white">Loading assessment...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 text-white">
+      <header className="p-4 bg-gray-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
+        <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <button
+            onClick={() => router.push('/')}
             className="text-indigo-400 hover:text-indigo-300 transition flex items-center gap-2"
           >
             ← Back to Dashboard
           </button>
-          <h1 className="text-2xl font-bold text-center bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent">
-            RiskIQ-AI Assessment
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent">
+            Security Assessment
           </h1>
-          <div className="w-32"></div> {/* Spacer for centering */}
+          <div className="w-32"></div>
         </div>
       </header>
 
-      <main className="flex-grow p-4 space-y-4 overflow-y-auto" style={{maxHeight: 'calc(100vh - 160px)'}}>
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xl lg:max-w-2xl px-4 py-3 rounded-2xl shadow-md ${msg.type === 'error' ? 'bg-red-900/50' : msg.sender === 'user' ? 'bg-indigo-600' : 'bg-gray-700'}`}>
-              {renderMessageContent(msg)}
-            </div>
-          </div>
-        ))}
-        <div ref={chatEndRef} />
-      </main>
-
-      <footer className="p-4 bg-gray-900/80 backdrop-blur-md sticky bottom-0 z-10">
-        {error && (
-          <div className="text-red-400 text-center mb-2 p-2 bg-red-900/50 rounded flex items-center justify-center gap-2">
+      {error && (
+        <div className="bg-red-900/50 border border-red-600 text-red-200 p-4 m-4 rounded-lg">
+          <div className="flex justify-between items-center">
             <span>Error: {error}</span>
             <button
-              onClick={handleRetry}
-              className="px-3 py-1 rounded bg-red-800 hover:bg-red-700 transition"
+              onClick={() => setError(null)}
+              className="text-red-400 hover:text-red-300"
             >
-              Retry
+              ✕
             </button>
           </div>
-        )}
-        <form onSubmit={handleUserInput} className="flex gap-3">
-          <input
-            type="text"
-            value={userInput}
-            onChange={(e) => setUserInput(e.target.value)}
-            placeholder={isLoading ? "Thinking..." : (conversationState === 'collecting_profile' || conversationState === 'asking_risk_questions' ? "Type your answer..." : "Conversation ended.")}
-            className="flex-grow p-3 rounded-xl bg-gray-800 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition disabled:opacity-50"
-            disabled={isLoading || !['collecting_profile', 'asking_risk_questions'].includes(conversationState)}
-          />
-          <button
-            type="submit"
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold shadow-lg hover:from-indigo-600 hover:to-purple-700 transition disabled:opacity-50"
-            disabled={isLoading || !userInput.trim() || !['collecting_profile', 'asking_risk_questions'].includes(conversationState)}
-          >
-            Send
-          </button>
-        </form>
-      </footer>
+        </div>
+      )}
+
+      <main className="py-8">
+        {currentView === 'overview' && renderOverview()}
+        {currentView === 'section' && renderSection()}
+        {currentView === 'results' && renderResults()}
+      </main>
     </div>
   );
 };
 
-export default AssessmentPage;
+export default ModernAssessmentPage;
