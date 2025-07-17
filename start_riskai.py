@@ -82,11 +82,32 @@ class RiskAIStarter:
             python_exe = venv_dir / "bin" / "python"
             pip_exe = venv_dir / "bin" / "pip"
         
-        # Install requirements
-        requirements_file = backend_dir / "requirements.txt"
+        # Install requirements with compatibility handling
+        requirements_file = backend_dir / "requirements-fixed.txt"
         if requirements_file.exists():
-            print("  Installing Python dependencies...")
+            print("  Installing Python dependencies (compatible version)...")
             subprocess.run([str(pip_exe), "install", "-r", str(requirements_file)], check=True)
+        else:
+            # Fallback to original requirements
+            requirements_file = backend_dir / "requirements.txt"
+            if requirements_file.exists():
+                print("  Installing Python dependencies...")
+                try:
+                    subprocess.run([str(pip_exe), "install", "-r", str(requirements_file)], check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"  ⚠️  Some packages failed to install: {e}")
+                    print("  Installing essential packages only...")
+                    # Install essential packages manually
+                    essential_packages = [
+                        "fastapi", "uvicorn", "pydantic", "requests", "numpy", "pandas",
+                        "transformers", "sentence-transformers", "torch", "sqlalchemy",
+                        "python-multipart", "python-dotenv", "aiofiles"
+                    ]
+                    for package in essential_packages:
+                        try:
+                            subprocess.run([str(pip_exe), "install", package], check=True)
+                        except subprocess.CalledProcessError:
+                            print(f"    ⚠️  Failed to install {package}, continuing...")
         
         # Create data directories
         data_dir = backend_dir / "data"

@@ -2,7 +2,23 @@
 
 ## **Immediate Setup (5 Minutes)**
 
-### **Option 1: One-Click Start (Recommended)**
+### **Option 1: Automated Installation (Recommended)**
+
+```bash
+# Navigate to the RiskAI directory
+cd riskai
+
+# Run the installation script (handles Python compatibility)
+python install_riskai.py
+
+# Test the installation
+python test_installation.py
+
+# Start RiskAI
+python start_riskai.py
+```
+
+### **Option 2: One-Click Start (If already installed)**
 
 ```bash
 # Navigate to the RiskAI directory
@@ -15,7 +31,7 @@ python start_riskai.py
 This will:
 - ✅ Check all requirements
 - ✅ Set up virtual environment
-- ✅ Install dependencies
+- ✅ Install compatible dependencies
 - ✅ Start both backend and frontend
 - ✅ Open your browser automatically
 
