@@ -62,6 +62,12 @@ class RiskAssessmentValidator:
         
         # NIST CSF framework mappings
         self.nist_csf_mappings = self._load_nist_csf_mappings()
+        
+        # Multi-industry validation datasets
+        self.multi_industry_datasets = self._initialize_multi_industry_datasets()
+        
+        # Case studies for validation
+        self.case_studies = self._load_case_studies()
     
     def _load_industry_benchmarks(self) -> Dict[str, List[BenchmarkScore]]:
         """Load industry benchmarks (placeholder - would load from database)"""

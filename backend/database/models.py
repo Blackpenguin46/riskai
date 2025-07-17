@@ -165,6 +165,168 @@ class ChatHistory(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class AssessmentHistory(Base):
+    """Historical assessment tracking for trend analysis"""
+    __tablename__ = "assessment_history"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, nullable=True)  # Foreign key to companies
+    assessment_id = Column(Integer, nullable=False)  # Foreign key to assessments
+    
+    # Historical data
+    snapshot_date = Column(DateTime, default=datetime.utcnow)
+    overall_score = Column(Float, nullable=False)
+    maturity_level = Column(String(50))
+    risk_level = Column(String(50))
+    
+    # Detailed scores
+    section_scores = Column(JSON)  # Section-level scores
+    category_scores = Column(JSON)  # Category-level scores
+    
+    # Metadata
+    assessment_version = Column(String(50), default="2.0")
+    change_reason = Column(String(200))  # Why was this assessment taken
+    
+class TrendAnalysis(Base):
+    """Trend analysis results and insights"""
+    __tablename__ = "trend_analysis"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, nullable=True)  # Foreign key to companies
+    
+    # Analysis period
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    analysis_date = Column(DateTime, default=datetime.utcnow)
+    
+    # Trend data
+    trend_direction = Column(String(50))  # improving, declining, stable
+    trend_strength = Column(Float)  # correlation coefficient
+    slope = Column(Float)  # rate of change
+    
+    # Predictions
+    predicted_score = Column(Float)
+    prediction_confidence = Column(Float)
+    
+    # Analysis results
+    insights = Column(JSON)  # Key insights and recommendations
+    risk_factors = Column(JSON)  # Identified risk factors
+    
+class ImprovementTracking(Base):
+    """Track improvement initiatives and their impact"""
+    __tablename__ = "improvement_tracking"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, nullable=True)  # Foreign key to companies
+    assessment_id = Column(Integer, nullable=True)  # Related assessment
+    
+    # Initiative details
+    initiative_name = Column(String(255), nullable=False)
+    description = Column(Text)
+    category = Column(String(100))  # security, compliance, process
+    
+    # Progress tracking
+    status = Column(String(50), default="planned")  # planned, in_progress, completed, paused
+    priority = Column(String(50), default="medium")  # high, medium, low
+    
+    # Impact measurement
+    baseline_score = Column(Float)
+    current_score = Column(Float)
+    target_score = Column(Float)
+    impact_percentage = Column(Float)
+    
+    # Timeline
+    start_date = Column(DateTime)
+    target_date = Column(DateTime)
+    completion_date = Column(DateTime)
+    
+    # Resources
+    assigned_to = Column(String(255))
+    budget_allocated = Column(Float)
+    budget_spent = Column(Float)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class SessionData(Base):
+    """Enhanced session data for persistence"""
+    __tablename__ = "session_data"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(100), nullable=False, unique=True)
+    company_id = Column(Integer, nullable=True)  # Foreign key to companies
+    
+    # Session metadata
+    session_type = Column(String(50), default="assessment")  # assessment, chat, analysis
+    user_agent = Column(String(500))
+    ip_address = Column(String(45))
+    
+    # Session state
+    current_page = Column(String(100))
+    progress_data = Column(JSON)  # Current progress state
+    form_data = Column(JSON)  # Temporary form data
+    preferences = Column(JSON)  # User preferences
+    
+    # Activity tracking
+    last_activity = Column(DateTime, default=datetime.utcnow)
+    total_time_spent = Column(Integer, default=0)  # seconds
+    page_views = Column(Integer, default=0)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime)
+
+class DataAnalytics(Base):
+    """Analytics and insights storage"""
+    __tablename__ = "data_analytics"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, nullable=True)  # Foreign key to companies
+    
+    # Analytics metadata
+    metric_name = Column(String(100), nullable=False)
+    metric_category = Column(String(100))  # performance, quality, usage
+    
+    # Metric data
+    metric_value = Column(Float, nullable=False)
+    metric_unit = Column(String(50))
+    
+    # Context
+    dimension_data = Column(JSON)  # Additional dimensions
+    calculation_method = Column(String(100))
+    
+    # Timestamps
+    measurement_date = Column(DateTime, default=datetime.utcnow)
+    
+class BenchmarkComparison(Base):
+    """Store benchmark comparisons for analysis"""
+    __tablename__ = "benchmark_comparisons"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, nullable=True)  # Foreign key to companies
+    assessment_id = Column(Integer, nullable=True)  # Related assessment
+    
+    # Comparison data
+    industry = Column(String(100), nullable=False)
+    company_size = Column(String(50))
+    
+    # Scores
+    company_score = Column(Float, nullable=False)
+    industry_average = Column(Float)
+    percentile_rank = Column(Float)
+    
+    # Competitor data
+    competitor_data = Column(JSON)
+    
+    # Analysis results
+    strengths = Column(JSON)
+    weaknesses = Column(JSON)
+    recommendations = Column(JSON)
+    
+    # Timestamps
+    comparison_date = Column(DateTime, default=datetime.utcnow)
+
 # Database configuration
 DATABASE_DIR = os.getenv("DATABASE_DIR", "/app/database_data")
 os.makedirs(DATABASE_DIR, exist_ok=True)

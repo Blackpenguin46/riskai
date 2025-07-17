@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import json
+from ..data_pipeline.quantitative_data import QuantitativeDataPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,13 @@ class ScoreLevel(Enum):
     GOOD = (7, 8)          # Good implementation, minor improvements needed
     EXCELLENT = (9, 10)    # Excellent implementation, best practices followed
 
+class QualitativeStrength(Enum):
+    """Qualitative strength indicators for better scoring"""
+    WEAK = "weak"          # Weak evidence, low confidence
+    MODERATE = "moderate"  # Moderate evidence, medium confidence
+    STRONG = "strong"      # Strong evidence, high confidence
+    VERY_STRONG = "very_strong"  # Very strong evidence, very high confidence
+
 @dataclass
 class ScoringCriteria:
     """Scoring criteria for a specific category"""
@@ -31,6 +39,15 @@ class ScoringCriteria:
     evidence_indicators: Dict[str, int]  # Keyword/phrase -> Score boost
     maturity_levels: Dict[str, int]  # Maturity level -> Base score
     industry_adjustments: Dict[str, float]  # Industry -> Score modifier
+
+@dataclass
+class QualitativeAssessment:
+    """Enhanced qualitative assessment with strength indicators"""
+    strength: QualitativeStrength
+    confidence_multiplier: float
+    evidence_patterns: List[str]
+    quantitative_support: Optional[float]
+    validation_score: float
 
 @dataclass
 class ScoreJustification:
@@ -42,6 +59,8 @@ class ScoreJustification:
     evidence_found: List[str]
     missing_evidence: List[str]
     recommendations: List[str]
+    qualitative_assessment: Optional[QualitativeAssessment] = None
+    quantitative_support: Optional[Dict[str, Any]] = None
 
 class ObjectiveScorer:
     """Main class for objective risk scoring"""
@@ -50,6 +69,8 @@ class ObjectiveScorer:
         self.scoring_criteria = self._initialize_scoring_criteria()
         self.maturity_keywords = self._initialize_maturity_keywords()
         self.evidence_patterns = self._initialize_evidence_patterns()
+        self.qualitative_strength_indicators = self._initialize_qualitative_strength_indicators()
+        self.quantitative_pipeline = QuantitativeDataPipeline()
         
     def _initialize_scoring_criteria(self) -> Dict[str, ScoringCriteria]:
         """Initialize detailed scoring criteria for each category"""
@@ -343,22 +364,46 @@ class ObjectiveScorer:
             total_adjustments = sum(adj[1] for adj in adjustments)
             final_score = max(1, min(10, base_score + total_adjustments))
             
-            # Calculate confidence based on evidence
-            confidence = self._calculate_confidence(answer, evidence_found, criteria)
+            # Assess qualitative strength
+            qualitative_assessment = self._assess_qualitative_strength(answer, evidence_found)
             
-            # Generate recommendations
+            # Apply qualitative strength adjustments
+            qual_boost = self.qualitative_strength_indicators[qualitative_assessment.strength.value]['score_boost']
+            if qual_boost != 0:
+                adjustments.append(('qualitative_strength', qual_boost, f'Qualitative strength: {qualitative_assessment.strength.value}'))
+                final_score = max(1, min(10, final_score + qual_boost))
+            
+            # Get quantitative support
+            quantitative_support = self.quantitative_pipeline.get_quantitative_support(
+                category_id, 
+                company_profile.get('industry', 'technology'), 
+                final_score
+            )
+            
+            # Apply quantitative confidence boost
+            base_confidence = self._calculate_confidence(answer, evidence_found, criteria)
+            confidence = base_confidence * qualitative_assessment.confidence_multiplier
+            confidence += quantitative_support.get('confidence_boost', 0.0)
+            
+            # Add quantitative recommendations
             missing_evidence = [evidence for evidence in criteria.evidence_indicators.keys() 
                               if evidence not in evidence_found]
             recommendations = self._generate_recommendations(final_score, missing_evidence, criteria)
+            
+            # Add quantitative recommendations
+            quant_recommendations = quantitative_support.get('quantitative_support', {}).get('recommendations', [])
+            recommendations.extend(quant_recommendations[:2])  # Add top 2 quantitative recommendations
             
             return ScoreJustification(
                 score=final_score,
                 base_score=base_score,
                 adjustments=adjustments,
-                confidence=confidence,
+                confidence=min(1.0, confidence),
                 evidence_found=evidence_found,
                 missing_evidence=missing_evidence[:5],  # Top 5 missing
-                recommendations=recommendations
+                recommendations=recommendations[:7],  # Limit total recommendations
+                qualitative_assessment=qualitative_assessment,
+                quantitative_support=quantitative_support
             )
             
         except Exception as e:
@@ -558,6 +603,152 @@ class ObjectiveScorer:
             consistency_report['error'] = str(e)
         
         return consistency_report
+    
+    def _initialize_qualitative_strength_indicators(self) -> Dict[str, Dict[str, Any]]:
+        """Initialize qualitative strength indicators for better scoring"""
+        
+        return {
+            'very_strong': {
+                'patterns': [
+                    'implemented and tested',
+                    'fully automated',
+                    'continuously monitored',
+                    'regularly reviewed and updated',
+                    'compliant with industry standards',
+                    'third-party validated',
+                    'documented and maintained',
+                    'executive oversight'
+                ],
+                'confidence_multiplier': 1.2,
+                'score_boost': 2,
+                'required_evidence_count': 3
+            },
+            'strong': {
+                'patterns': [
+                    'implemented',
+                    'documented',
+                    'tested',
+                    'monitored',
+                    'regular reviews',
+                    'policy in place',
+                    'training provided',
+                    'metrics tracked'
+                ],
+                'confidence_multiplier': 1.1,
+                'score_boost': 1,
+                'required_evidence_count': 2
+            },
+            'moderate': {
+                'patterns': [
+                    'partially implemented',
+                    'basic documentation',
+                    'some monitoring',
+                    'informal process',
+                    'planned implementation',
+                    'limited testing',
+                    'basic training',
+                    'some metrics'
+                ],
+                'confidence_multiplier': 1.0,
+                'score_boost': 0,
+                'required_evidence_count': 1
+            },
+            'weak': {
+                'patterns': [
+                    'not implemented',
+                    'no documentation',
+                    'no monitoring',
+                    'ad hoc approach',
+                    'no formal process',
+                    'no testing',
+                    'no training',
+                    'no metrics'
+                ],
+                'confidence_multiplier': 0.8,
+                'score_boost': -1,
+                'required_evidence_count': 0
+            }
+        }
+    
+    def _assess_qualitative_strength(self, answer: str, evidence_found: List[str]) -> QualitativeAssessment:
+        """Assess the qualitative strength of the response"""
+        
+        answer_lower = answer.lower()
+        strength_scores = {}
+        
+        # Check patterns for each strength level
+        for strength_level, indicators in self.qualitative_strength_indicators.items():
+            pattern_matches = sum(1 for pattern in indicators['patterns'] if pattern in answer_lower)
+            evidence_score = len(evidence_found) >= indicators['required_evidence_count']
+            
+            strength_scores[strength_level] = {
+                'pattern_score': pattern_matches,
+                'evidence_score': evidence_score,
+                'total_score': pattern_matches + (2 if evidence_score else 0)
+            }
+        
+        # Determine dominant strength
+        best_strength = max(strength_scores.items(), key=lambda x: x[1]['total_score'])
+        strength_level = best_strength[0]
+        
+        # Calculate validation score
+        validation_score = min(1.0, best_strength[1]['total_score'] / 5.0)
+        
+        # Determine quantitative support (if available)
+        quantitative_support = self._extract_quantitative_support(answer)
+        
+        return QualitativeAssessment(
+            strength=QualitativeStrength(strength_level),
+            confidence_multiplier=self.qualitative_strength_indicators[strength_level]['confidence_multiplier'],
+            evidence_patterns=self._extract_evidence_patterns(answer),
+            quantitative_support=quantitative_support,
+            validation_score=validation_score
+        )
+    
+    def _extract_quantitative_support(self, answer: str) -> Optional[float]:
+        """Extract quantitative support from answer (percentages, numbers, etc.)"""
+        
+        import re
+        
+        # Look for percentages
+        percentage_matches = re.findall(r'(\d+(?:\.\d+)?)\s*%', answer)
+        if percentage_matches:
+            percentages = [float(p) for p in percentage_matches]
+            return sum(percentages) / len(percentages)
+        
+        # Look for completion indicators
+        completion_patterns = [
+            r'(\d+)\s*out\s*of\s*(\d+)',
+            r'(\d+)/(\d+)',
+            r'(\d+)\s*of\s*(\d+)'
+        ]
+        
+        for pattern in completion_patterns:
+            matches = re.findall(pattern, answer)
+            if matches:
+                completed, total = matches[0]
+                return (float(completed) / float(total)) * 100
+        
+        return None
+    
+    def _extract_evidence_patterns(self, answer: str) -> List[str]:
+        """Extract evidence patterns from answer"""
+        
+        patterns = []
+        answer_lower = answer.lower()
+        
+        # Common evidence patterns
+        evidence_keywords = [
+            'implemented', 'deployed', 'configured', 'documented', 'tested',
+            'monitored', 'automated', 'reviewed', 'updated', 'maintained',
+            'compliant', 'validated', 'trained', 'measured', 'tracked'
+        ]
+        
+        for keyword in evidence_keywords:
+            if keyword in answer_lower:
+                patterns.append(keyword)
+        
+        return patterns
     
     def _group_similar_assessments(self, assessments: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
         """Group assessments by similar company profiles"""
