@@ -83,31 +83,37 @@ class RiskAIStarter:
             pip_exe = venv_dir / "bin" / "pip"
         
         # Install requirements with compatibility handling
-        requirements_file = backend_dir / "requirements-fixed.txt"
+        requirements_file = backend_dir / "requirements-minimal.txt"
         if requirements_file.exists():
-            print("  Installing Python dependencies (compatible version)...")
-            subprocess.run([str(pip_exe), "install", "-r", str(requirements_file)], check=True)
+            print("  Installing Python dependencies (minimal version)...")
+            try:
+                subprocess.run([str(pip_exe), "install", "-r", str(requirements_file)], check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"  ⚠️  Some packages failed to install: {e}")
+                print("  Installing essential packages only...")
+                self._install_essential_packages(pip_exe)
         else:
-            # Fallback to original requirements
-            requirements_file = backend_dir / "requirements.txt"
+            # Try fixed requirements
+            requirements_file = backend_dir / "requirements-fixed.txt"
             if requirements_file.exists():
-                print("  Installing Python dependencies...")
+                print("  Installing Python dependencies (compatible version)...")
                 try:
                     subprocess.run([str(pip_exe), "install", "-r", str(requirements_file)], check=True)
                 except subprocess.CalledProcessError as e:
                     print(f"  ⚠️  Some packages failed to install: {e}")
                     print("  Installing essential packages only...")
-                    # Install essential packages manually
-                    essential_packages = [
-                        "fastapi", "uvicorn", "pydantic", "requests", "numpy", "pandas",
-                        "transformers", "sentence-transformers", "torch", "sqlalchemy",
-                        "python-multipart", "python-dotenv", "aiofiles"
-                    ]
-                    for package in essential_packages:
-                        try:
-                            subprocess.run([str(pip_exe), "install", package], check=True)
-                        except subprocess.CalledProcessError:
-                            print(f"    ⚠️  Failed to install {package}, continuing...")
+                    self._install_essential_packages(pip_exe)
+            else:
+                # Fallback to original requirements
+                requirements_file = backend_dir / "requirements.txt"
+                if requirements_file.exists():
+                    print("  Installing Python dependencies...")
+                    try:
+                        subprocess.run([str(pip_exe), "install", "-r", str(requirements_file)], check=True)
+                    except subprocess.CalledProcessError as e:
+                        print(f"  ⚠️  Some packages failed to install: {e}")
+                        print("  Installing essential packages only...")
+                        self._install_essential_packages(pip_exe)
         
         # Create data directories
         data_dir = backend_dir / "data"
@@ -119,6 +125,48 @@ class RiskAIStarter:
         
         print("✅ Backend setup complete")
         return python_exe
+    
+    def _install_essential_packages(self, pip_exe):
+        """Install essential packages one by one"""
+        
+        essential_packages = [
+            "fastapi==0.115.9",
+            "uvicorn==0.34.2", 
+            "pydantic==2.11.4",
+            "requests==2.32.3",
+            "numpy==2.2.5",
+            "pandas==2.2.3",
+            "sqlalchemy==2.0.40",
+            "python-multipart==0.0.20",
+            "python-dotenv==1.1.0",
+            "aiofiles==24.1.0",
+            "PyYAML==6.0.2",
+            "click==8.2.0",
+            "rich==14.0.0",
+            "tqdm==4.67.1"
+        ]
+        
+        for package in essential_packages:
+            try:
+                print(f"    Installing {package}...")
+                subprocess.run([str(pip_exe), "install", package], check=True)
+            except subprocess.CalledProcessError:
+                print(f"    ⚠️  Failed to install {package}, continuing...")
+        
+        # Try to install AI packages (optional)
+        ai_packages = [
+            "transformers==4.51.3",
+            "torch==2.7.0",
+            "tokenizers==0.21.1",
+            "huggingface-hub==0.31.2"
+        ]
+        
+        for package in ai_packages:
+            try:
+                print(f"    Installing {package} (optional)...")
+                subprocess.run([str(pip_exe), "install", package], check=True)
+            except subprocess.CalledProcessError:
+                print(f"    ⚠️  Failed to install {package}, AI features may be limited...")
     
     def setup_frontend(self):
         """Setup frontend environment"""
