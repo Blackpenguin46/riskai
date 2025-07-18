@@ -38,11 +38,47 @@ class StandaloneBuilder:
         }
         
         print(f"Building for {self.platform} {self.arch}")
+    
+    def check_build_dependencies(self):
+        """Check and install build dependencies"""
         
+        print("Checking build dependencies...")
+        
+        # Check if PyInstaller is available
+        try:
+            subprocess.run(["pyinstaller", "--version"], capture_output=True, check=True)
+            print("✅ PyInstaller found")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("📦 Installing PyInstaller...")
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
+                print("✅ PyInstaller installed")
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Failed to install PyInstaller: {e}")
+                sys.exit(1)
+        
+        # Check Node.js and npm
+        try:
+            subprocess.run(["node", "--version"], capture_output=True, check=True)
+            print("✅ Node.js found")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("❌ Node.js not found. Please install Node.js from https://nodejs.org/")
+            sys.exit(1)
+        
+        try:
+            subprocess.run(["npm", "--version"], capture_output=True, check=True)
+            print("✅ npm found")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("❌ npm not found. Please install npm")
+            sys.exit(1)
+    
     def build_all(self):
         """Build complete standalone package"""
         
         print("Starting standalone build process...")
+        
+        # Check and install build dependencies
+        self.check_build_dependencies()
         
         # Clean previous builds
         self.clean_build_dir()
@@ -82,21 +118,27 @@ class StandaloneBuilder:
         # Create main backend script
         main_script = self.create_backend_main()
         
-        # Build with PyInstaller
+        # Build with PyInstaller (minimal version)
         pyinstaller_args = [
             "pyinstaller",
             "--onefile",
-            "--windowed" if self.platform == "windows" else "",
             "--name", f"riskai-backend",
             "--distpath", str(backend_dir),
             "--workpath", str(self.build_dir / "temp"),
             "--specpath", str(self.build_dir / "temp"),
-            "--add-data", f"{self.base_dir}/backend/data;data",
-            "--add-data", f"{self.base_dir}/backend/vectordb;vectordb",
-            "--hidden-import", "sklearn",
-            "--hidden-import", "transformers",
-            "--hidden-import", "torch",
-            "--hidden-import", "chromadb",
+            "--exclude-module", "torch",
+            "--exclude-module", "transformers",
+            "--exclude-module", "sklearn",
+            "--exclude-module", "matplotlib",
+            "--exclude-module", "scipy",
+            "--exclude-module", "jupyter",
+            "--exclude-module", "ipython",
+            "--exclude-module", "pandas",
+            "--exclude-module", "numpy",
+            "--hidden-import", "fastapi",
+            "--hidden-import", "uvicorn",
+            "--hidden-import", "pydantic",
+            "--hidden-import", "sqlalchemy",
             str(main_script)
         ]
         
