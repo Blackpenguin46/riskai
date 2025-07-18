@@ -16,11 +16,32 @@ DB_PERSIST_DIR = os.getenv("DB_PERSIST_DIR", "vectordb")
 PDF_DATA_DIR   = os.getenv("PDF_DATA_DIR",   "data/")
 
 
-# --- RAG/vector/LLM imports and initialization ---
-from rag_pipeline.loader import load_documents, chunk_documents
-from rag_pipeline.embedder import get_embedder
-from rag_pipeline.store import store_embeddings, load_existing_embeddings
-from rag_pipeline.retriever import build_rag_chain
+# --- RAG/vector/LLM imports and initialization (with compatibility) ---
+try:
+    from rag_pipeline.compatibility_wrapper import (
+        load_documents, chunk_documents, get_embedder, 
+        store_embeddings, load_existing_embeddings, build_rag_chain
+    )
+except ImportError:
+    # Fallback to simple implementations
+    from rag_pipeline.loader_simple import load_documents, chunk_documents
+    from rag_pipeline.simple_vector_store import create_simple_vector_store
+    
+    def get_embedder():
+        from rag_pipeline.compatibility_wrapper import SimpleEmbedder
+        return SimpleEmbedder()
+    
+    def store_embeddings(chunks, embedder, persist_dir="vectordb"):
+        vector_store = create_simple_vector_store(persist_dir + "_simple")
+        vector_store.add_documents(chunks)
+        return vector_store
+    
+    def load_existing_embeddings(embedder, persist_dir="vectordb"):
+        return create_simple_vector_store(persist_dir + "_simple")
+    
+    def build_rag_chain(db):
+        from rag_pipeline.compatibility_wrapper import SimpleRAGChain
+        return SimpleRAGChain(db)
 
 # --- New modules for enhanced functionality ---
 from metrics.dashboard import metrics_dashboard

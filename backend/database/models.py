@@ -328,7 +328,7 @@ class BenchmarkComparison(Base):
     comparison_date = Column(DateTime, default=datetime.utcnow)
 
 # Database configuration
-DATABASE_DIR = os.getenv("DATABASE_DIR", "/app/database_data")
+DATABASE_DIR = os.getenv("DATABASE_DIR", "database_data")
 os.makedirs(DATABASE_DIR, exist_ok=True)
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_DIR}/riskai.db")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})

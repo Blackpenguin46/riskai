@@ -522,6 +522,53 @@ class RiskAssessmentValidator:
             "recommendations": recommendations,
             "timestamp": np.datetime64('now').isoformat()
         }
+    
+    def _initialize_multi_industry_datasets(self) -> Dict[str, Any]:
+        """Initialize multi-industry validation datasets"""
+        return {
+            "healthcare": {
+                "compliance_standards": ["HIPAA", "FDA", "CDC"],
+                "risk_thresholds": {"high": 7.5, "medium": 5.0, "low": 2.5}
+            },
+            "finance": {
+                "compliance_standards": ["SOX", "PCI-DSS", "GDPR"],
+                "risk_thresholds": {"high": 8.0, "medium": 5.5, "low": 3.0}
+            },
+            "technology": {
+                "compliance_standards": ["ISO27001", "NIST", "SOC2"],
+                "risk_thresholds": {"high": 7.0, "medium": 4.5, "low": 2.0}
+            },
+            "manufacturing": {
+                "compliance_standards": ["ISO27001", "NIST", "IEC62443"],
+                "risk_thresholds": {"high": 6.5, "medium": 4.0, "low": 2.0}
+            }
+        }
+    
+    def _load_case_studies(self) -> List[Dict[str, Any]]:
+        """Load case studies for validation"""
+        return [
+            {
+                "id": "healthcare_hospital",
+                "industry": "healthcare", 
+                "organization_size": "large",
+                "expected_score_range": {"min": 6.5, "max": 8.5},
+                "key_controls": ["access_control", "encryption", "audit_logging"]
+            },
+            {
+                "id": "finance_bank",
+                "industry": "finance",
+                "organization_size": "large", 
+                "expected_score_range": {"min": 7.0, "max": 9.0},
+                "key_controls": ["multi_factor_auth", "transaction_monitoring", "fraud_detection"]
+            },
+            {
+                "id": "tech_startup",
+                "industry": "technology",
+                "organization_size": "small",
+                "expected_score_range": {"min": 5.0, "max": 7.5},
+                "key_controls": ["code_review", "vulnerability_scanning", "incident_response"]
+            }
+        ]
 
 # Global instance
 risk_validator = RiskAssessmentValidator()

@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import json
-from ..data_pipeline.quantitative_data import QuantitativeDataPipeline
+from data_pipeline.quantitative_data import QuantitativeDataPipeline
 
 logger = logging.getLogger(__name__)
 
