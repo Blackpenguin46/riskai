@@ -315,38 +315,12 @@ netstat -tulpn | grep :8000
 - Ensure Docker has at least 4GB RAM allocated
 - Close other applications to free memory
 
-### Getting Help
-- **Issues**: [GitHub Issues](https://github.com/Blackpenguin46/riskai/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Blackpenguin46/riskai/discussions)
-- **Email**: support@riskai.com
-
-## 🎯 Roadmap
-
-### Upcoming Features
-- [ ] **Multi-tenant Support**: Organization management
-- [ ] **Advanced Analytics**: Trend analysis and benchmarking
-- [ ] **API Integrations**: Third-party security tool integration
-- [ ] **Mobile App**: Native mobile assessment interface
-- [ ] **Enterprise SSO**: SAML and OAuth integration
-
-### Research Initiatives
-- [ ] **Machine Learning**: Enhanced recommendation algorithms
-- [ ] **Natural Language Processing**: Automated report generation
-- [ ] **Blockchain**: Immutable audit trails
-- [ ] **Quantum Security**: Post-quantum cryptography assessment
 
 ---
 
-## 🏆 Recognition
 
-RiskAI has been recognized for its innovative approach to cybersecurity risk assessment:
-
-- **Academic Research**: Published in leading cybersecurity journals
-- **Industry Awards**: Recognized for innovation in risk assessment
-- **Open Source**: Contributing to the cybersecurity community
 
 ---
 
-**Built with ❤️ for the cybersecurity community**
 
 *Empowering organizations to build stronger security postures through intelligent risk assessment.*
