@@ -1,214 +1,386 @@
-# Security Documentation
+# Security Policy
 
-## Overview
+## 🛡️ Security Overview
 
-This document outlines the security architecture, threat modeling, and defensive measures implemented within the RiskAI platform. The platform leverages the MITRE ATT&CK framework for comprehensive threat intelligence and risk assessment capabilities.
+RiskAI takes security seriously. As a cybersecurity risk assessment platform, we implement comprehensive security measures to protect user data, ensure system integrity, and maintain the confidentiality of assessment information.
 
-## MITRE ATT&CK Framework Integration
+## 📋 Table of Contents
 
-### Framework Implementation
+1. [Supported Versions](#supported-versions)
+2. [Reporting Security Vulnerabilities](#reporting-security-vulnerabilities)
+3. [Security Measures](#security-measures)
+4. [Data Protection](#data-protection)
+5. [Authentication & Authorization](#authentication--authorization)
+6. [Infrastructure Security](#infrastructure-security)
+7. [Compliance](#compliance)
+8. [Security Best Practices](#security-best-practices)
 
-The RiskAI platform integrates the MITRE ATT&CK Enterprise framework (`enterprise-attack.json`) to provide:
+## 🔄 Supported Versions
 
-- **Threat Intelligence**: Real-time analysis of attack patterns and techniques
-- **Risk Assessment**: Mapping of organizational vulnerabilities to known attack vectors
-- **Mitigation Strategies**: Automated recommendations based on MITRE ATT&CK mitigations
-- **Compliance Alignment**: Cross-reference with regulatory frameworks (NIST, ISO 27001)
+We provide security updates for the following versions of RiskAI:
 
-### Attack Technique Coverage
+| Version | Supported          | End of Support |
+| ------- | ------------------ | -------------- |
+| 1.2.x   | ✅ Yes             | TBD            |
+| 1.1.x   | ✅ Yes             | 2025-06-01     |
+| 1.0.x   | ⚠️ Limited Support | 2025-03-01     |
+| < 1.0   | ❌ No              | Ended          |
 
-The platform covers all 14 MITRE ATT&CK tactics:
+### Support Policy
+- **Current Version**: Full security support with immediate patches
+- **Previous Version**: Security patches for critical vulnerabilities
+- **Limited Support**: Critical security issues only
+- **Unsupported**: No security updates provided
 
-1. **Reconnaissance** - External information gathering
-2. **Resource Development** - Establishing resources for operations
-3. **Initial Access** - Gaining foothold in the network
-4. **Execution** - Running malicious code
-5. **Persistence** - Maintaining access
-6. **Privilege Escalation** - Gaining higher-level permissions
-7. **Defense Evasion** - Avoiding detection
-8. **Credential Access** - Stealing credentials
-9. **Discovery** - Exploring the environment
-10. **Lateral Movement** - Moving through the network
-11. **Collection** - Gathering information
-12. **Command and Control** - Communicating with compromised systems
-13. **Exfiltration** - Stealing data
-14. **Impact** - Manipulating, interrupting, or destroying systems
+## 🚨 Reporting Security Vulnerabilities
 
-### Threat Intelligence Integration
+### Responsible Disclosure
 
-```python
-# Example: ATT&CK technique mapping in risk assessment
-ATTACK_TECHNIQUE_MAPPING = {
-    "T1566": {
-        "name": "Phishing",
-        "tactic": "Initial Access",
-        "risk_weight": 8.5,
-        "mitigations": ["M1031", "M1032", "M1054"],
-        "detection_methods": ["Email gateway analysis", "User training validation"]
-    }
-}
-```
+We encourage responsible disclosure of security vulnerabilities. Please follow these guidelines:
 
-## Security Architecture
+#### How to Report
+1. **Email**: Send details to `security@riskai.com`
+2. **Subject**: Include "SECURITY" in the subject line
+3. **Encryption**: Use our PGP key for sensitive information
+4. **Details**: Provide comprehensive vulnerability information
 
-### Network Security
+#### What to Include
+- **Description**: Clear description of the vulnerability
+- **Impact**: Potential impact and affected components
+- **Reproduction**: Step-by-step reproduction instructions
+- **Environment**: System details where vulnerability was found
+- **Proof of Concept**: Code or screenshots (if applicable)
+- **Suggested Fix**: Proposed solution (if available)
 
-- **Segmentation**: Docker network isolation between frontend, backend, and AI services
-- **TLS Encryption**: All communications encrypted in transit using TLS 1.3
-- **API Security**: Rate limiting, input validation, and authentication on all endpoints
-- **Network Monitoring**: Real-time traffic analysis and anomaly detection
+#### Response Timeline
+- **Acknowledgment**: Within 24 hours
+- **Initial Assessment**: Within 72 hours
+- **Status Updates**: Weekly until resolution
+- **Fix Timeline**: Based on severity (see below)
 
-### Authentication & Authorization
+### Severity Levels
 
-- **Multi-Factor Authentication**: Required for all administrative access
-- **Role-Based Access Control (RBAC)**: Granular permissions based on user roles
-- **OAuth2/JWT**: Secure token-based authentication
-- **Session Management**: Secure session handling with automatic timeout
+#### Critical (CVSS 9.0-10.0)
+- **Response Time**: Immediate (within 24 hours)
+- **Fix Timeline**: 1-3 days
+- **Examples**: Remote code execution, authentication bypass
 
-### Data Protection
+#### High (CVSS 7.0-8.9)
+- **Response Time**: Within 48 hours
+- **Fix Timeline**: 1-2 weeks
+- **Examples**: Privilege escalation, data exposure
 
-- **Encryption at Rest**: AES-256 encryption for sensitive data
-- **Data Classification**: Automated tagging and handling of sensitive information
-- **Backup Security**: Encrypted backups with secure key management
-- **Data Retention**: Automated purging based on retention policies
+#### Medium (CVSS 4.0-6.9)
+- **Response Time**: Within 1 week
+- **Fix Timeline**: 2-4 weeks
+- **Examples**: Information disclosure, CSRF
 
-## Threat Modeling
+#### Low (CVSS 0.1-3.9)
+- **Response Time**: Within 2 weeks
+- **Fix Timeline**: Next scheduled release
+- **Examples**: Minor information leakage
 
-### Attack Surface Analysis
+### Bug Bounty Program
 
-1. **Web Application**: Frontend React application
-2. **API Endpoints**: FastAPI backend services
-3. **AI/ML Pipeline**: Ollama and vector database integration
-4. **Database**: PostgreSQL and vector storage
-5. **Container Infrastructure**: Docker and container orchestration
+We operate a responsible disclosure program with recognition for security researchers:
 
-### High-Risk Scenarios
+#### Rewards
+- **Critical**: $500-$2000
+- **High**: $200-$500
+- **Medium**: $50-$200
+- **Low**: Recognition and thanks
 
-- **Data Exfiltration**: Unauthorized access to sensitive risk assessment data
-- **AI Model Poisoning**: Manipulation of training data or model parameters
-- **Supply Chain Attacks**: Compromised dependencies or container images
-- **Insider Threats**: Malicious or compromised user accounts
+#### Eligibility
+- First to report the vulnerability
+- Follows responsible disclosure guidelines
+- Provides sufficient detail for reproduction
+- Does not publicly disclose before fix
 
-## Security Controls
+## 🔒 Security Measures
 
-### Technical Controls
+### Application Security
 
-- **Web Application Firewall (WAF)**: Protection against common web attacks
-- **Intrusion Detection System (IDS)**: Real-time monitoring and alerting
-- **Vulnerability Scanning**: Automated security testing of applications and infrastructure
-- **Container Security**: Image scanning and runtime protection
+#### Input Validation
+- **Sanitization**: All user inputs sanitized and validated
+- **Type Checking**: Strict type validation for API endpoints
+- **Length Limits**: Maximum input length enforcement
+- **SQL Injection**: Parameterized queries and ORM usage
+- **XSS Prevention**: Output encoding and CSP headers
 
-### Administrative Controls
+#### Authentication Security
+- **Password Hashing**: bcrypt with salt for password storage
+- **Session Management**: Secure session tokens with expiration
+- **Multi-Factor Authentication**: TOTP and SMS support
+- **Account Lockout**: Brute force protection
+- **Password Policy**: Strong password requirements
 
-- **Security Policies**: Documented security procedures and guidelines
-- **Access Reviews**: Regular audits of user permissions and access
-- **Incident Response Plan**: Defined procedures for security incidents
-- **Security Training**: Regular training for development and operations teams
+#### API Security
+- **Rate Limiting**: Request throttling per IP and user
+- **CORS Configuration**: Strict cross-origin policies
+- **API Versioning**: Backward compatibility and deprecation
+- **Request Validation**: Schema validation for all endpoints
+- **Error Handling**: Secure error messages without information leakage
 
-### Physical Controls
+### Infrastructure Security
 
-- **Secure Hosting**: Cloud infrastructure with SOC 2 compliance
-- **Environmental Controls**: Monitoring of hosting environment
-- **Access Controls**: Restricted physical access to systems
+#### Network Security
+- **HTTPS Only**: TLS 1.2+ encryption for all communications
+- **Certificate Pinning**: SSL certificate validation
+- **Firewall Rules**: Restrictive ingress/egress policies
+- **VPN Access**: Secure administrative access
+- **Network Segmentation**: Isolated production environments
 
-## Risk Assessment Process
+#### Container Security
+- **Base Images**: Minimal, regularly updated base images
+- **Vulnerability Scanning**: Automated container scanning
+- **Secrets Management**: Secure environment variable handling
+- **Resource Limits**: Container resource constraints
+- **Non-Root Execution**: Containers run as non-privileged users
 
-### Automated Risk Scoring
+#### Database Security
+- **Encryption at Rest**: Database encryption with managed keys
+- **Encryption in Transit**: TLS for database connections
+- **Access Controls**: Role-based database permissions
+- **Backup Encryption**: Encrypted backup storage
+- **Audit Logging**: Database access and modification logs
 
-The platform uses weighted risk scoring based on:
+## 🔐 Data Protection
 
-- **CVSS Scores**: Common Vulnerability Scoring System integration
-- **MITRE ATT&CK Mappings**: Technique-based risk assessment
-- **Threat Intelligence**: Real-time threat feed integration
-- **Asset Criticality**: Business impact assessment
+### Data Classification
 
-### Risk Categories
+#### Highly Sensitive
+- **Assessment Responses**: User security assessment answers
+- **Company Profiles**: Organizational information
+- **Authentication Data**: Passwords, tokens, keys
+- **Personal Information**: User contact details
 
-1. **Technical Risks**: Vulnerabilities, misconfigurations, outdated systems
-2. **Operational Risks**: Process failures, human error, insider threats
-3. **Regulatory Risks**: Compliance gaps, regulatory changes
-4. **Strategic Risks**: Business continuity, reputation, competitive advantage
+#### Sensitive
+- **Assessment Results**: Calculated scores and recommendations
+- **Usage Analytics**: User behavior and system metrics
+- **System Logs**: Application and security logs
+- **Configuration Data**: System settings and parameters
 
-## Compliance and Frameworks
+#### Internal
+- **Documentation**: Technical specifications and guides
+- **Code**: Application source code (open source)
+- **Test Data**: Non-production testing information
+
+### Data Handling
+
+#### Collection
+- **Minimal Collection**: Only necessary data collected
+- **Consent**: Clear user consent for data processing
+- **Purpose Limitation**: Data used only for stated purposes
+- **Retention Policy**: Automatic data deletion after retention period
+
+#### Processing
+- **Encryption**: Data encrypted during processing
+- **Access Controls**: Role-based access to sensitive data
+- **Audit Trails**: Comprehensive logging of data access
+- **Data Minimization**: Processing limited to necessary data
+
+#### Storage
+- **Encryption at Rest**: AES-256 encryption for stored data
+- **Geographic Restrictions**: Data stored in specified regions
+- **Backup Security**: Encrypted backups with access controls
+- **Retention Limits**: Automatic deletion after retention period
+
+#### Transmission
+- **TLS Encryption**: All data transmission encrypted
+- **Certificate Validation**: Proper SSL/TLS certificate handling
+- **Secure Protocols**: Modern encryption protocols only
+- **Data Integrity**: Checksums and validation for data transfer
+
+## 🔑 Authentication & Authorization
+
+### User Authentication
+
+#### Multi-Factor Authentication (MFA)
+- **TOTP Support**: Time-based one-time passwords
+- **SMS Backup**: SMS-based second factor
+- **Recovery Codes**: Secure backup authentication codes
+- **Device Registration**: Trusted device management
+
+#### Session Management
+- **Secure Tokens**: Cryptographically secure session tokens
+- **Token Expiration**: Automatic session timeout
+- **Token Rotation**: Regular token refresh
+- **Concurrent Sessions**: Limited concurrent session support
+
+### Authorization Framework
+
+#### Role-Based Access Control (RBAC)
+- **User Roles**: Admin, Assessor, Viewer roles
+- **Permission Sets**: Granular permission assignment
+- **Resource Access**: Object-level access controls
+- **Inheritance**: Role hierarchy and permission inheritance
+
+#### API Authorization
+- **Token Validation**: JWT token verification
+- **Scope Limitation**: API access scope restrictions
+- **Rate Limiting**: Per-user API rate limits
+- **Audit Logging**: API access logging and monitoring
+
+## 🏗️ Infrastructure Security
+
+### Deployment Security
+
+#### Production Environment
+- **Isolated Networks**: Separate production network segments
+- **Bastion Hosts**: Secure administrative access points
+- **Monitoring**: Comprehensive security monitoring
+- **Incident Response**: Automated security incident handling
+
+#### Container Orchestration
+- **Kubernetes Security**: Pod security policies and network policies
+- **Service Mesh**: Encrypted service-to-service communication
+- **Secrets Management**: Kubernetes secrets and external vaults
+- **Image Scanning**: Continuous vulnerability scanning
+
+### Monitoring & Alerting
+
+#### Security Monitoring
+- **SIEM Integration**: Security information and event management
+- **Anomaly Detection**: Behavioral analysis and alerting
+- **Threat Intelligence**: Integration with threat feeds
+- **Incident Response**: Automated response to security events
+
+#### Logging & Auditing
+- **Comprehensive Logging**: All security-relevant events logged
+- **Log Integrity**: Tamper-evident log storage
+- **Retention Policy**: Secure log retention and archival
+- **Analysis Tools**: Log analysis and correlation tools
+
+## 📋 Compliance
 
 ### Regulatory Compliance
 
-- **GDPR**: Data protection and privacy requirements
-- **SOX**: Financial reporting and internal controls
-- **NIST Cybersecurity Framework**: Risk management and security controls
-- **ISO 27001**: Information security management
+#### GDPR (General Data Protection Regulation)
+- **Data Subject Rights**: Right to access, rectify, erase data
+- **Consent Management**: Clear consent mechanisms
+- **Data Protection Officer**: Designated DPO contact
+- **Privacy by Design**: Built-in privacy protections
+
+#### CCPA (California Consumer Privacy Act)
+- **Consumer Rights**: Right to know, delete, opt-out
+- **Data Disclosure**: Transparent data usage policies
+- **Non-Discrimination**: Equal service regardless of privacy choices
+
+#### SOC 2 Type II
+- **Security Controls**: Comprehensive security control framework
+- **Availability**: System availability and performance monitoring
+- **Confidentiality**: Data confidentiality protections
+- **Processing Integrity**: Data processing accuracy and completeness
 
 ### Industry Standards
 
-- **CIS Controls**: Critical security controls implementation
-- **OWASP Top 10**: Web application security best practices
-- **SANS Critical Controls**: Essential cybersecurity measures
+#### ISO 27001
+- **Information Security Management**: Systematic security approach
+- **Risk Assessment**: Regular security risk assessments
+- **Continuous Improvement**: Ongoing security enhancement
+- **Certification**: Third-party security certification
 
-## Incident Response
+#### NIST Cybersecurity Framework
+- **Identify**: Asset and risk identification
+- **Protect**: Protective security measures
+- **Detect**: Security event detection
+- **Respond**: Incident response procedures
+- **Recover**: Recovery and resilience planning
 
-### Response Process
+## 🛠️ Security Best Practices
 
-1. **Detection**: Automated monitoring and alerting
-2. **Analysis**: Threat intelligence and impact assessment
-3. **Containment**: Isolation and damage limitation
-4. **Eradication**: Removal of threats and vulnerabilities
-5. **Recovery**: System restoration and validation
-6. **Lessons Learned**: Post-incident analysis and improvement
+### For Users
 
-### Communication Plan
+#### Account Security
+- **Strong Passwords**: Use complex, unique passwords
+- **Enable MFA**: Activate multi-factor authentication
+- **Regular Updates**: Keep browsers and systems updated
+- **Secure Networks**: Use trusted network connections
+- **Log Out**: Properly log out after sessions
 
-- **Internal Notifications**: Immediate alerts to security team
-- **Management Reporting**: Executive briefings on significant incidents
-- **External Communications**: Regulatory notifications and customer updates
-- **Documentation**: Detailed incident logs and forensic evidence
+#### Data Protection
+- **Sensitive Information**: Limit sharing of assessment data
+- **Access Controls**: Use appropriate user permissions
+- **Regular Reviews**: Periodically review access and data
+- **Incident Reporting**: Report suspicious activities immediately
 
-## Security Monitoring
+### For Administrators
 
-### Continuous Monitoring
+#### System Hardening
+- **Regular Updates**: Apply security patches promptly
+- **Configuration Review**: Regular security configuration audits
+- **Access Management**: Implement least privilege principles
+- **Monitoring**: Enable comprehensive security monitoring
+- **Backup Testing**: Regular backup and recovery testing
 
-- **SIEM Integration**: Centralized log analysis and correlation
-- **Real-time Alerting**: Immediate notification of security events
-- **Threat Hunting**: Proactive search for indicators of compromise
-- **Metrics and KPIs**: Security performance measurement
+#### Incident Response
+- **Response Plan**: Maintain updated incident response procedures
+- **Contact Information**: Keep emergency contact lists current
+- **Communication**: Establish clear communication channels
+- **Documentation**: Document all security incidents
+- **Lessons Learned**: Conduct post-incident reviews
 
-### Monitoring Metrics
+### For Developers
 
-- **Mean Time to Detection (MTTD)**: Speed of threat identification
-- **Mean Time to Response (MTTR)**: Speed of incident response
-- **False Positive Rate**: Accuracy of security alerts
-- **Coverage Metrics**: Extent of security monitoring
+#### Secure Development
+- **Security Training**: Regular security awareness training
+- **Code Reviews**: Mandatory security-focused code reviews
+- **Static Analysis**: Automated security code analysis
+- **Dependency Management**: Regular dependency vulnerability scanning
+- **Threat Modeling**: Security threat modeling for new features
 
-## References
+#### Testing
+- **Security Testing**: Comprehensive security testing procedures
+- **Penetration Testing**: Regular third-party security assessments
+- **Vulnerability Scanning**: Automated vulnerability scanning
+- **Compliance Testing**: Regular compliance validation testing
 
-### MITRE ATT&CK Resources
+## 📞 Security Contacts
 
-- [MITRE ATT&CK Framework](https://attack.mitre.org/)
-- [Enterprise ATT&CK Matrix](https://attack.mitre.org/matrices/enterprise/)
-- [ATT&CK Techniques](https://attack.mitre.org/techniques/enterprise/)
-- [ATT&CK Mitigations](https://attack.mitre.org/mitigations/enterprise/)
+### Primary Contacts
+- **Security Team**: security@riskai.com
+- **Emergency**: security-emergency@riskai.com (24/7)
+- **Compliance**: compliance@riskai.com
+- **Privacy**: privacy@riskai.com
 
-### Security Frameworks
+### PGP Key
+```
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+[PGP Key would be included here for encrypted communications]
+-----END PGP PUBLIC KEY BLOCK-----
+```
 
-- [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
-- [ISO 27001](https://www.iso.org/isoiec-27001-information-security.html)
-- [CIS Controls](https://www.cisecurity.org/controls/)
-- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+### Response Times
+- **Critical Issues**: 24 hours
+- **High Priority**: 48 hours
+- **Medium Priority**: 1 week
+- **Low Priority**: 2 weeks
 
-### Documentation
+## 🔄 Security Updates
 
-- [Risk Assessment Methodology](./DATA_PERSISTENCE.md)
-- [Technical Architecture](./tech-stack.md)
-- [Development Guidelines](./CLAUDE.md)
-- [Compliance Documentation](./data/governance-risk-and-compliance-control-framework.pdf)
+### Update Notifications
+- **Security Advisories**: Published on GitHub Security tab
+- **Email Notifications**: Sent to registered administrators
+- **RSS Feed**: Available for automated monitoring
+- **Status Page**: Real-time security status updates
 
-## Security Contact Information
-
-For security-related questions or to report security vulnerabilities:
-
-- **Security Team**: security@riskai.local
-- **Incident Response**: incident-response@riskai.local
-- **24/7 Security Hotline**: +1-XXX-XXX-XXXX
+### Patch Management
+- **Critical Patches**: Immediate deployment
+- **Security Updates**: Weekly deployment cycle
+- **Regular Updates**: Monthly deployment cycle
+- **Emergency Patches**: As needed for critical vulnerabilities
 
 ---
 
-*This document is classified as Internal Use and should be protected accordingly. Last updated: July 2025*
+## 📚 Additional Resources
+
+- **Security Documentation**: [Security Guide](SECURITY_GUIDE.md)
+- **Incident Response Plan**: [Incident Response](INCIDENT_RESPONSE.md)
+- **Compliance Documentation**: [Compliance Guide](COMPLIANCE.md)
+- **Security Training**: [Security Training Materials](SECURITY_TRAINING.md)
+
+---
+
+**Security is a shared responsibility. We appreciate your cooperation in keeping RiskAI secure for all users.**
+
+*This security policy is reviewed and updated regularly. Last updated: January 2025*
