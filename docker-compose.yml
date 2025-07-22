@@ -5,35 +5,40 @@ services:
       dockerfile: Dockerfile.backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend/data:/app/data      # your PDFs live here
-      - ./backend/vectordb:/app/vectordb
-      - ./backend/database_data:/app/database_data  # SQLite database persistence
     environment:
-      PDF_DATA_DIR: /app/data
-      DB_PERSIST_DIR: /app/vectordb
-      DATABASE_DIR: /app/database_data
-      PYTHONUNBUFFERED: "1"
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
-      - riskai_network
+      - riskai-network
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=production
     depends_on:
       - backend
-    environment:
-      NODE_ENV: production
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
-      - riskai_network
+      - riskai-network
 
 networks:
-  riskai_network:
+  riskai-network:
     driver: bridge
 
+volumes:
+  backend-data:
+  frontend-data:

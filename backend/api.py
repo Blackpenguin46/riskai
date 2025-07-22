@@ -62,6 +62,11 @@ from chat.risk_mitigation_chat import risk_mitigation_chat
 # --- Main dashboard module ---
 from dashboard.main_dashboard import main_dashboard
 
+# --- Session management modules ---
+from session_manager import session_manager
+from progress_tracker import progress_tracker
+from state_restorer import state_restorer
+
 # File upload handling
 from fastapi import UploadFile, File, Form
 from typing import List as ListType
@@ -86,6 +91,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include the session router
+from api_session import router as session_router
+app.include_router(session_router, tags=["Session Management"])
+
+# Include the AI feedback router
+from assessment.feedback_api import router as feedback_router
+app.include_router(feedback_router, tags=["AI Feedback"])
+
+# Include the advisory router
+from advisory.advisory_api import router as advisory_router
+app.include_router(advisory_router, tags=["Risk Advisory"])
+
+# Include the assessment router
+from assessment.assessment_api import router as assessment_router
+app.include_router(assessment_router, tags=["Assessment"])
 
 # ------------------------------------
 # Global RAG Pipeline Components & Limits
@@ -113,12 +134,41 @@ async def startup_event():
         from database.models import init_database
         init_database()
         
-        logger.info("Skipping embedder and RAG initialization for debugging...")
-        # Temporarily disabled for debugging
-        embedder = None
-        db = None
-        qa_chain = None
-        logger.info("All AI components skipped for debugging")
+        logger.info("Initializing embedder and RAG pipeline...")
+        try:
+            # Initialize embedder
+            embedder = get_embedder()
+            logger.info("✓ Embedder initialized")
+            
+            # Try to load existing embeddings first
+            try:
+                db = load_existing_embeddings(embedder, DB_PERSIST_DIR)
+                logger.info("✓ Loaded existing vector database")
+            except Exception as e:
+                logger.info(f"No existing embeddings found, loading documents: {e}")
+                # Load and process documents
+                docs = load_documents(PDF_DATA_DIR)
+                if docs:
+                    chunks = chunk_documents(docs)
+                    db = store_embeddings(chunks, embedder, DB_PERSIST_DIR)
+                    logger.info(f"✓ Created vector database with {len(chunks)} chunks")
+                else:
+                    logger.warning("No documents found, creating empty vector store")
+                    db = None
+            
+            # Build QA chain
+            if db:
+                qa_chain = build_rag_chain(db)
+                logger.info("✓ RAG pipeline fully initialized")
+            else:
+                qa_chain = None
+                logger.warning("No vector database available for RAG chain")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize RAG components: {e}")
+            embedder = None
+            db = None
+            qa_chain = None
 
         logger.info("RAG pipeline initialized successfully")
         logger.info(f"RiskAI Backend ready on port {port}")
@@ -173,6 +223,48 @@ def health_check():
         return {"status": "ok"}
     else:
         raise HTTPException(status_code=503, detail="RAG not ready")
+
+@app.post("/reload-documents")
+async def reload_documents():
+    """Reload documents from the data directory"""
+    global embedder, db, qa_chain
+    
+    try:
+        logger.info("Reloading documents from data directory...")
+        
+        # Load documents
+        docs_dir = os.getenv("PDF_DATA_DIR", "data/")
+        docs = load_documents(docs_dir)
+        
+        if not docs:
+            logger.warning(f"No documents found in {docs_dir}")
+            return {"status": "warning", "message": f"No documents found in {docs_dir}"}
+        
+        logger.info(f"Loaded {len(docs)} documents")
+        
+        # Process documents
+        chunks = chunk_documents(docs)
+        logger.info(f"Created {len(chunks)} chunks")
+        
+        # Get embedder if not already initialized
+        if not embedder:
+            embedder = get_embedder()
+        
+        # Store embeddings
+        db = store_embeddings(chunks, embedder, DB_PERSIST_DIR)
+        logger.info(f"Stored embeddings in {DB_PERSIST_DIR}")
+        
+        # Build RAG chain
+        qa_chain = build_rag_chain(db)
+        logger.info("Built RAG chain")
+        
+        return {
+            "status": "success", 
+            "message": f"Reloaded {len(docs)} documents and created {len(chunks)} chunks"
+        }
+    except Exception as e:
+        logger.error(f"Error reloading documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reload documents: {str(e)}")
 
 class CompanyProfile(BaseModel):
     name: Optional[str] = None
@@ -1341,3 +1433,14 @@ def restore_data(backup_data: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Error restoring data: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to restore data: {str(e)}")
+# Include the risk categorization router
+from assessment.risk_categorization_api import router as risk_categorization_router
+app.include_router(risk_categorization_router, tags=["Risk Categorization"])
+
+# Include the scoring API router
+from assessment.scoring_api import router as scoring_router
+app.include_router(scoring_router, tags=["Scoring System"])
+
+# Include the question bank API router
+from assessment.question_api import router as question_router
+app.include_router(question_router, tags=["Question Bank"])

@@ -62,8 +62,44 @@ const ReportsPage: NextPage = () => {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'word'>('pdf');
 
   useEffect(() => {
-    fetchAssessments();
+    // Check if there are assessment results in session storage
+    const storedResults = sessionStorage.getItem('assessmentResults');
+    if (storedResults) {
+      try {
+        const results = JSON.parse(storedResults);
+        // Create a new assessment from the results
+        const newAssessment: AssessmentSummary = {
+          id: Date.now(), // Use timestamp as ID
+          company_name: 'Your Organization',
+          assessment_date: new Date().toISOString().split('T')[0],
+          overall_score: Math.round(results.overallScore),
+          completion_percentage: 100,
+          risk_level: getRiskLevelText(results.overallScore),
+          recommendations_count: Object.values(results.sectionRecommendations).flat().length,
+          framework_used: 'RiskAI Comprehensive Framework'
+        };
+        
+        // Add the new assessment to the list
+        setAssessments(prevAssessments => [newAssessment, ...prevAssessments]);
+        
+        // Automatically show the detailed report for the new assessment
+        createDetailedReportFromResults(newAssessment.id, results);
+      } catch (error) {
+        console.error('Error parsing assessment results:', error);
+      }
+    } else {
+      // If no results in session storage, fetch mock assessments
+      fetchAssessments();
+    }
   }, []);
+
+  const getRiskLevelText = (score: number): string => {
+    if (score >= 90) return 'Low';
+    if (score >= 75) return 'Medium-Low';
+    if (score >= 60) return 'Medium';
+    if (score >= 40) return 'Medium-High';
+    return 'High';
+  };
 
   const fetchAssessments = async () => {
     try {
@@ -110,6 +146,168 @@ const ReportsPage: NextPage = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  const createDetailedReportFromResults = (assessmentId: number, results: any) => {
+    try {
+      setIsLoading(true);
+      
+      // Get company profile from responses
+      const companyProfile = results.responses.company_profile || {};
+      const companyName = companyProfile.cp_001 || 'Your Organization';
+      const industry = companyProfile.cp_002 || 'Technology';
+      const companySize = companyProfile.cp_003 || 'Medium';
+      
+      // Create section reports
+      const sectionReports: ReportSection[] = [];
+      
+      // Map section IDs to readable names
+      const sectionNames = {
+        'company_profile': 'Company Profile',
+        'governance': 'Governance & Risk Management',
+        'asset_management': 'Asset Management',
+        'data_protection': 'Data Protection',
+        'access_control': 'Access Control',
+        'security_monitoring': 'Security Monitoring',
+        'incident_response': 'Incident Response',
+        'business_continuity': 'Business Continuity',
+        'security_awareness': 'Security Awareness',
+        'compliance': 'Regulatory Compliance',
+        'emerging_tech': 'Emerging Technologies',
+        'third_party': 'Third-Party Risk'
+      };
+      
+      // Create report sections
+      Object.entries(results.sectionScores).forEach(([sectionId, score]) => {
+        if (sectionId === 'company_profile') return; // Skip company profile section
+        
+        const sectionName = sectionNames[sectionId] || sectionId;
+        const sectionScore = Math.round(score as number);
+        const recommendations = results.sectionRecommendations[sectionId] || [];
+        
+        sectionReports.push({
+          section_name: sectionName,
+          score: sectionScore,
+          max_score: 100,
+          risk_level: getRiskLevelText(sectionScore),
+          findings: [
+            `Current maturity level: ${sectionScore >= 80 ? 'Advanced' : sectionScore >= 60 ? 'Established' : sectionScore >= 40 ? 'Developing' : 'Initial'}`,
+            `Score: ${sectionScore}/100`
+          ],
+          recommendations: recommendations,
+          compliance_notes: [
+            `Aligns with ${sectionScore >= 70 ? 'most' : 'some'} industry best practices`,
+            `${sectionScore >= 80 ? 'Meets' : 'Partially meets'} common regulatory requirements`
+          ]
+        });
+      });
+      
+      // Get strategic recommendations
+      const strategic = results.strategicRecommendations || {};
+      
+      // Create detailed report
+      const detailedReport: DetailedReport = {
+        assessment_id: assessmentId,
+        company_info: {
+          name: companyName,
+          size: companySize,
+          industry: industry,
+          location: 'Not specified'
+        },
+        assessment_metadata: {
+          date: new Date().toISOString().split('T')[0],
+          assessor: 'RiskAI Platform',
+          framework: 'RiskAI Comprehensive Framework',
+          version: '1.0'
+        },
+        executive_summary: {
+          overall_score: Math.round(results.overallScore),
+          risk_level: getRiskLevelText(results.overallScore),
+          key_findings: [
+            `Overall security maturity: ${strategic.maturityLevel || 'Moderate'}`,
+            `Strongest area: ${getStrongestArea(results.sectionScores)}`,
+            `Area needing most improvement: ${getWeakestArea(results.sectionScores)}`,
+            ...(strategic.strategicPriorities || []).slice(0, 2)
+          ],
+          critical_recommendations: [
+            ...(strategic.strategicPriorities || []),
+            ...(strategic.implementationRoadmap?.shortTerm || []).slice(0, 2)
+          ],
+          compliance_status: results.overallScore >= 80 ? 'Largely Compliant' : 
+                            results.overallScore >= 60 ? 'Partially Compliant' : 
+                            'Significant Gaps'
+        },
+        sections: sectionReports,
+        appendices: {
+          methodology: 'Assessment conducted using RiskAI Comprehensive Framework with evidence-based scoring across 120+ questions in 12 domains',
+          risk_matrix: 'Risk levels determined using probability and impact matrix with industry-specific benchmarks',
+          compliance_mapping: 'Results mapped to NIST CSF, ISO 27001, and other relevant frameworks'
+        }
+      };
+
+      setSelectedReport(detailedReport);
+      setActiveView('detail');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create detailed report');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const getStrongestArea = (sectionScores: Record<string, number>): string => {
+    // Skip company profile section
+    const filteredScores = Object.entries(sectionScores).filter(([id]) => id !== 'company_profile');
+    if (filteredScores.length === 0) return 'Not available';
+    
+    // Find section with highest score
+    const highestScore = filteredScores.reduce((highest, [id, score]) => {
+      return score > highest.score ? { id, score } : highest;
+    }, { id: '', score: 0 });
+    
+    // Map section ID to readable name
+    const sectionNames = {
+      'governance': 'Governance & Risk Management',
+      'asset_management': 'Asset Management',
+      'data_protection': 'Data Protection',
+      'access_control': 'Access Control',
+      'security_monitoring': 'Security Monitoring',
+      'incident_response': 'Incident Response',
+      'business_continuity': 'Business Continuity',
+      'security_awareness': 'Security Awareness',
+      'compliance': 'Regulatory Compliance',
+      'emerging_tech': 'Emerging Technologies',
+      'third_party': 'Third-Party Risk'
+    };
+    
+    return sectionNames[highestScore.id] || highestScore.id;
+  };
+  
+  const getWeakestArea = (sectionScores: Record<string, number>): string => {
+    // Skip company profile section
+    const filteredScores = Object.entries(sectionScores).filter(([id]) => id !== 'company_profile');
+    if (filteredScores.length === 0) return 'Not available';
+    
+    // Find section with lowest score
+    const lowestScore = filteredScores.reduce((lowest, [id, score]) => {
+      return score < lowest.score ? { id, score } : lowest;
+    }, { id: '', score: 100 });
+    
+    // Map section ID to readable name
+    const sectionNames = {
+      'governance': 'Governance & Risk Management',
+      'asset_management': 'Asset Management',
+      'data_protection': 'Data Protection',
+      'access_control': 'Access Control',
+      'security_monitoring': 'Security Monitoring',
+      'incident_response': 'Incident Response',
+      'business_continuity': 'Business Continuity',
+      'security_awareness': 'Security Awareness',
+      'compliance': 'Regulatory Compliance',
+      'emerging_tech': 'Emerging Technologies',
+      'third_party': 'Third-Party Risk'
+    };
+    
+    return sectionNames[lowestScore.id] || lowestScore.id;
   };
 
   const fetchDetailedReport = async (assessmentId: number) => {

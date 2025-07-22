@@ -344,8 +344,34 @@ def get_db():
 
 def init_database():
     """Initialize database tables"""
+    # Import session models to ensure they're included in the Base metadata
+    try:
+        from .session_models import AssessmentSession, SectionProgress, SessionResponse
+    except ImportError:
+        print("Session models not found, skipping...")
+    
+    # Import benchmark models
+    try:
+        from .benchmark_models import BenchmarkData, ToolComparison, ROIAnalysis, BenchmarkMethodology
+    except ImportError:
+        print("Benchmark models not found, skipping...")
+    
+    # Import validation models
+    try:
+        from .validation_models import IndustryValidation, ValidationMetric, ScoringRubric
+    except ImportError:
+        print("Validation models not found, skipping...")
+    
     Base.metadata.create_all(bind=engine)
     print("Database initialized successfully")
+    
+    # Load sample benchmark data
+    try:
+        from scoring.benchmark_data_loader import BenchmarkDataLoader
+        BenchmarkDataLoader.load_benchmark_data()
+        print("Sample benchmark data loaded")
+    except Exception as e:
+        print(f"Could not load benchmark data: {e}")
 
 def get_session():
     """Get a database session for direct use"""
@@ -561,3 +587,166 @@ class DatabaseManager:
             return None
         finally:
             db.close()
+
+# Enhanced Scoring System Models
+from sqlalchemy import UniqueConstraint
+
+class ScoringWeights(Base):
+    """Store scoring weights and formulas"""
+    __tablename__ = "scoring_weights"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Weight identification
+    weight_type = Column(String(50), nullable=False)  # section, question, category
+    identifier = Column(String(100), nullable=False)  # section_id, question_id, etc.
+    
+    # Weight data
+    weight_value = Column(Float, nullable=False)
+    max_score = Column(Float, nullable=False)
+    
+    # Metadata
+    description = Column(Text)
+    formula = Column(Text)  # Mathematical formula used
+    version = Column(String(20), default="1.0")
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ScoringMethodology(Base):
+    """Store scoring methodology documentation"""
+    __tablename__ = "scoring_methodology"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Methodology identification
+    methodology_name = Column(String(100), nullable=False)
+    version = Column(String(20), default="1.0")
+    
+    # Documentation
+    description = Column(Text, nullable=False)
+    mathematical_formula = Column(Text, nullable=False)
+    implementation_notes = Column(Text)
+    
+    # Configuration
+    parameters = Column(JSON)  # Configurable parameters
+    thresholds = Column(JSON)  # Risk level thresholds
+    
+    # Validation
+    test_cases = Column(JSON)  # Test cases for validation
+    validation_results = Column(JSON)  # Validation test results
+    
+    # Metadata
+    created_by = Column(String(100))
+    approved_by = Column(String(100))
+    approval_date = Column(DateTime)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AssessmentResult(Base):
+    """Enhanced assessment results with detailed scoring"""
+    __tablename__ = "assessment_results"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    assessment_id = Column(Integer, nullable=False)  # Foreign key to assessments
+    session_id = Column(String(100), nullable=True)
+    
+    # Overall scoring
+    overall_score = Column(Float, nullable=False)
+    risk_level = Column(String(50), nullable=False)
+    risk_color = Column(String(20))
+    
+    # Statistical analysis
+    confidence_interval_lower = Column(Float)
+    confidence_interval_upper = Column(Float)
+    confidence_level = Column(Float, default=0.95)
+    margin_of_error = Column(Float)
+    statistical_significance = Column(Float)
+    
+    # Benchmarking
+    industry = Column(String(100))
+    company_size = Column(String(50))
+    industry_percentile = Column(Float)
+    performance_vs_peers = Column(Float)
+    
+    # Detailed results
+    section_scores = Column(JSON)  # Section-level scores
+    question_scores = Column(JSON)  # Question-level scores
+    recommendations = Column(JSON)  # Generated recommendations
+    
+    # Trend analysis
+    trend_direction = Column(String(50))
+    trend_magnitude = Column(Float)
+    improvement_rate = Column(Float)
+    volatility = Column(Float)
+    
+    # Metadata
+    scoring_version = Column(String(20), default="1.0")
+    methodology_used = Column(String(100))
+    
+    # Timestamps
+    completed_at = Column(DateTime, default=datetime.utcnow)
+    
+class IndustryBenchmarks(Base):
+    """Store industry benchmark data"""
+    __tablename__ = "industry_benchmarks"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Industry identification
+    industry = Column(String(100), nullable=False)
+    company_size = Column(String(50), nullable=False)
+    
+    # Statistical data
+    average_score = Column(Float, nullable=False)
+    standard_deviation = Column(Float, nullable=False)
+    sample_size = Column(Integer, nullable=False)
+    
+    # Percentile data
+    percentile_10 = Column(Float)
+    percentile_25 = Column(Float)
+    percentile_50 = Column(Float)
+    percentile_75 = Column(Float)
+    percentile_90 = Column(Float)
+    
+    # Metadata
+    data_source = Column(String(200))
+    collection_method = Column(String(200))
+    data_quality_score = Column(Float)
+    
+    # Timestamps
+    data_date = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ScoringAuditLog(Base):
+    """Audit log for scoring operations"""
+    __tablename__ = "scoring_audit_log"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Operation details
+    operation_type = Column(String(50), nullable=False)  # calculate, update, validate
+    assessment_id = Column(Integer, nullable=True)
+    
+    # Input data
+    input_data = Column(JSON)  # Input parameters
+    methodology_used = Column(String(100))
+    
+    # Results
+    output_data = Column(JSON)  # Calculation results
+    execution_time_ms = Column(Integer)
+    
+    # Status
+    status = Column(String(20), nullable=False)  # success, error, warning
+    error_message = Column(Text)
+    
+    # Metadata
+    user_id = Column(String(100))
+    session_id = Column(String(100))
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)

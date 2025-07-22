@@ -1,57 +1,27 @@
-# Dockerfile for Frontend (Next.js)
+FROM node:18-alpine
 
-# Stage 1: Build the Next.js application
-FROM node:20-alpine AS builder
-
-# Set working directory
 WORKDIR /app
 
-# Install pnpm globally (if your project uses pnpm, adjust if using npm or yarn)
-# The existing project has package-lock.json, so it likely uses npm.
-# If it uses pnpm, uncomment the next line and adjust package.json scripts if needed.
-# RUN npm install -g pnpm
+# Set environment variables
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+ENV CI=false
+ENV DISABLE_ESLINT_PLUGIN=true
 
-# Copy package.json and package-lock.json (or pnpm-lock.yaml, yarn.lock)
-COPY ./frontend/package.json ./frontend/package-lock.json* ./
-# If using pnpm: COPY ./frontend/pnpm-lock.yaml ./
-# If using yarn: COPY ./frontend/yarn.lock ./
+# Copy package files
+COPY frontend/package*.json ./
 
-# Install dependencies
-# If using pnpm: RUN pnpm install --frozen-lockfile
-RUN npm install
+# Install all dependencies (including dev for build)
+RUN npm ci
 
-# Copy the rest of the frontend application code
-COPY ./frontend .
+# Copy frontend code
+COPY frontend/ .
 
-# Accept build arguments for Next.js environment variables
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-
-# Build the Next.js application
+# Build the application with error handling
 RUN npm run build
 
-# Stage 2: Serve the built application using a lightweight server
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Copy built assets from the builder stage
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/next.config.ts ./
-
-# Install production dependencies (Next.js itself for serving)
-# We need package.json here to install next for `next start`
-# If your `next build` outputs a standalone server, this might be simpler.
-# Check Next.js output modes if image size is critical.
-RUN npm install --omit=dev next
-
-# Expose port 3000
+# Expose port
 EXPOSE 3000
 
-# Command to start the Next.js production server
-CMD ["npm", "run", "start"] 
-# This assumes your package.json has a "start": "next start" script.
-# If not, use: CMD ["npx", "next", "start", "-p", "3000"]
-
+# Start the application
+CMD ["npm", "start"]

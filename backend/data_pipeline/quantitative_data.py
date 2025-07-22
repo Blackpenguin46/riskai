@@ -1,13 +1,162 @@
+#!/usr/bin/env python3
 """
-Quantitative Data Pipeline Module
+Quantitative Data Pipeline
 
-Integrates quantitative data sources to enhance qualitative assessment accuracy
-with measurable metrics and benchmarks.
+Provides quantitative benchmarks and data points to support 
+qualitative assessment scoring with real-world data.
 """
 
 import logging
-import numpy as np
-import pandas as pd
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from enum import Enum
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class IndustryBenchmark:
+    industry: str
+    metric: str
+    value: float
+    unit: str
+    source: str
+    confidence: float
+
+@dataclass
+class QuantitativeMetric:
+    metric_id: str
+    name: str
+    category: str
+    current_value: Optional[float]
+    benchmark_value: float
+    unit: str
+    higher_is_better: bool
+    confidence_score: float
+
+class IndustryType(Enum):
+    HEALTHCARE = "healthcare"
+    FINANCE = "finance" 
+    TECHNOLOGY = "technology"
+    MANUFACTURING = "manufacturing"
+    GOVERNMENT = "government"
+    EDUCATION = "education"
+    RETAIL = "retail"
+    GENERAL = "general"
+
+class CompanySize(Enum):
+    SMALL = "small"          # <50 employees
+    MEDIUM = "medium"        # 50-500 employees  
+    LARGE = "large"          # 500-5000 employees
+    ENTERPRISE = "enterprise" # >5000 employees
+
+class QuantitativeDataPipeline:
+    """Pipeline for quantitative cybersecurity benchmarks"""
+    
+    def __init__(self):
+        self.industry_benchmarks = self._load_industry_benchmarks()
+        self.security_metrics = self._load_security_metrics()
+        self.maturity_benchmarks = self._load_maturity_benchmarks()
+        
+    def get_industry_benchmark(self, industry: str, metric: str, company_size: str = "medium") -> Optional[float]:
+        """Get industry-specific benchmark for a metric"""
+        
+        key = f"{industry.lower()}_{metric}_{company_size.lower()}"
+        benchmark = self.industry_benchmarks.get(key)
+        
+        if not benchmark:
+            # Fallback to general benchmark
+            key = f"general_{metric}_{company_size.lower()}"
+            benchmark = self.industry_benchmarks.get(key)
+        
+        return benchmark
+    
+    def calculate_quantitative_score(self, user_value: float, benchmark_value: float, 
+                                   higher_is_better: bool = True) -> float:
+        """Calculate score based on quantitative comparison"""
+        
+        if benchmark_value == 0:
+            return 50.0  # Default score if no benchmark
+        
+        ratio = user_value / benchmark_value
+        
+        if higher_is_better:
+            # Higher values are better (e.g., MFA adoption percentage)
+            if ratio >= 1.0:
+                return min(100.0, 80 + (ratio - 1.0) * 20)  # 80-100 scale
+            else:
+                return ratio * 80  # 0-80 scale
+        else:
+            # Lower values are better (e.g., incident response time)
+            if ratio <= 1.0:
+                return min(100.0, 80 + (1.0 - ratio) * 20)  # 80-100 scale
+            else:
+                return max(0.0, 80 - (ratio - 1.0) * 40)  # 40-80 scale
+    
+    def _load_industry_benchmarks(self) -> Dict[str, float]:
+        """Load industry benchmark data"""
+        
+        return {
+            # MFA Adoption Rates (%)
+            "healthcare_mfa_adoption_small": 78,
+            "healthcare_mfa_adoption_medium": 85,
+            "healthcare_mfa_adoption_large": 92,
+            "finance_mfa_adoption_small": 88,
+            "finance_mfa_adoption_medium": 94,
+            "finance_mfa_adoption_large": 98,
+            "technology_mfa_adoption_small": 85,
+            "technology_mfa_adoption_medium": 91,
+            "technology_mfa_adoption_large": 95,
+            "general_mfa_adoption_small": 65,
+            "general_mfa_adoption_medium": 75,
+            "general_mfa_adoption_large": 85,
+            
+            # Data Encryption Rates (%)
+            "healthcare_data_encryption_small": 85,
+            "healthcare_data_encryption_medium": 92,
+            "healthcare_data_encryption_large": 96,
+            "finance_data_encryption_small": 90,
+            "finance_data_encryption_medium": 95,
+            "finance_data_encryption_large": 98,
+            "general_data_encryption_small": 70,
+            "general_data_encryption_medium": 80,
+            "general_data_encryption_large": 88,
+        }
+    
+    def _load_security_metrics(self) -> Dict[str, Dict[str, Any]]:
+        """Load security metrics configuration"""
+        
+        return {
+            "access_control": {
+                "mfa_adoption": {
+                    "benchmark": 85,
+                    "weight": 3.0,
+                    "higher_is_better": True,
+                    "unit": "percentage"
+                }
+            },
+            "data_protection": {
+                "encryption_coverage": {
+                    "benchmark": 90,
+                    "weight": 3.0,
+                    "higher_is_better": True,
+                    "unit": "percentage"
+                }
+            }
+        }
+    
+    def _load_maturity_benchmarks(self) -> Dict[str, Dict[str, float]]:
+        """Load maturity level benchmarks"""
+        
+        return {
+            "initial": {"min": 0, "max": 39},
+            "basic": {"min": 40, "max": 59},
+            "defined": {"min": 60, "max": 74},
+            "managed": {"min": 75, "max": 89},
+            "optimized": {"min": 90, "max": 100}
+        }
+
+# Global instance
+quantitative_pipeline = QuantitativeDataPipeline()
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta

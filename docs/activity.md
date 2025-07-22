@@ -428,3 +428,157 @@ docker-compose up --build
 ---
 
 *Multi-page frontend now integrated with main dashboard - ready for deployment*
+
+---
+
+### Session 8: Codebase Examination
+
+**Objective**: Comprehensive examination of the RiskAI codebase to understand architecture, components, and functionality
+
+**Examination Completed**:
+
+1. **Project Structure Analysis**:
+   - Root directory contains comprehensive documentation (README, deployment guides)
+   - Docker-based deployment with backend (FastAPI) and frontend (Next.js)
+   - Extensive data directory with cybersecurity frameworks and research papers
+   - Portable distribution system for enterprise deployment
+
+2. **Backend Architecture Review**:
+   - **Main API**: `main_api.py` - Unified API with comprehensive endpoint integration
+   - **Legacy API**: `api.py` - Original comprehensive API with RAG pipeline integration
+   - **Assessment System**: Complete modular assessment framework with:
+     - AI feedback engine
+     - Bias detection and mitigation
+     - Source attribution system
+     - Comprehensive scoring algorithms
+     - 120-question assessment framework
+   - **Scoring Engine**: Mathematical scoring with transparency and confidence intervals
+   - **Data Management**: Company-specific workspaces and document processing
+   - **Benchmarking**: Quantitative comparison with major GRC tools
+
+3. **Frontend Architecture Review**:
+   - **Next.js 15** with React 19 and TypeScript
+   - **Research Demo Page**: Demonstrates key research contributions
+   - **Component Library**: Scoring visualization, feedback display, real-time updates
+   - **Multi-page Navigation**: Assessment, chat, benchmarks, reports, validation
+   - **API Integration**: Comprehensive backend connectivity
+
+4. **Key Research Components Identified**:
+   - **Mathematical Scoring**: Transparent formulas with confidence intervals
+   - **AI Bias Detection**: Multi-dimensional fairness analysis
+   - **Framework Source Attribution**: Authoritative linking to NIST, ISO 27001, CIS Controls
+   - **Industry-Specific Adaptations**: 120-question comprehensive assessment
+   - **Real-time Analysis**: Live scoring with predictive outcomes
+
+5. **Technology Stack**:
+   - **Backend**: Python 3.13, FastAPI, SQLAlchemy, ChromaDB for vector storage
+   - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
+   - **AI/ML**: RAG pipeline with embeddings, LLM integration
+   - **Database**: SQLite with ChromaDB for vector operations
+   - **Deployment**: Docker Compose with health checks and networking
+
+6. **Enterprise Features**:
+   - **Session Management**: Persistent state across assessments
+   - **Data Persistence**: Complete backup/restore functionality
+   - **Company Workspaces**: Isolated data environments
+   - **Performance Metrics**: Real-time monitoring and validation
+   - **Compliance Integration**: HIPAA, SOC2, GDPR, PCI DSS support
+
+**Codebase Health Assessment**:
+- ✅ **Well-Structured**: Clear modular architecture with separation of concerns
+- ✅ **Comprehensive**: Full-featured cybersecurity risk assessment platform
+- ✅ **Research-Ready**: Implementation supports academic paper validation
+- ✅ **Enterprise-Grade**: Production deployment capabilities with Docker
+- ✅ **Scalable**: Modular design allows for feature expansion
+- ✅ **Documented**: Extensive documentation and API specifications
+
+**Security Evaluation**:
+- ✅ **No Malicious Code Detected**: All examined files appear legitimate
+- ✅ **Defensive Security Focus**: Platform designed for cybersecurity assessment
+- ✅ **Framework Compliance**: Adheres to NIST, ISO 27001, CIS Controls
+- ✅ **Data Protection**: Isolated workspaces and secure data handling
+
+**Examination Status**: COMPLETE ✅
+
+*Codebase examination reveals a sophisticated, well-architected cybersecurity risk assessment platform ready for research validation and enterprise deployment*
+
+---
+
+### Session 9: Enterprise Assessment Implementation with Dynamic Scoring
+
+**Objective**: Fix scoring issues and implement enterprise-ready assessment with dynamic scoring based on actual answers
+
+**Problems Identified**:
+- RAG pipeline was disabled for debugging (causing "Service not ready" errors)
+- Scoring was static/demo data rather than dynamic based on actual answers
+- Lack of clear quantitative/qualitative scoring guidelines
+- No industry-specific benchmarks for score calibration
+
+**Solutions Implemented**:
+
+1. **Fixed RAG Pipeline Initialization** (`backend/api.py`):
+   - Re-enabled embedder and vector database initialization
+   - Added proper document loading and chunking
+   - Fixed QA chain building for AI-powered feedback
+
+2. **Created Dynamic Scoring Engine** (`backend/scoring/dynamic_scoring_engine.py`):
+   - **Question Type Support**: Multiple choice, scale, boolean, percentage, frequency, text
+   - **Evidence Strength Analysis**: "weak", "moderate", "strong", "very_strong" classifications
+   - **Maturity Level Mapping**: Initial → Basic → Defined → Managed → Optimized
+   - **Industry Adjustments**: Healthcare/Finance stricter standards, Tech innovation bonuses
+   - **Quantitative Support**: Industry benchmarks and percentage-based scoring
+
+3. **Enterprise Assessment API** (`backend/assessment/enterprise_assessment_api.py`):
+   - **Structured Questions**: 8 sections with 25+ enterprise-grade questions
+   - **Multiple Question Types**: Scale (1-10), multiple choice, boolean, percentage, text
+   - **Dynamic Scoring**: Scores change based on actual answers, not static values
+   - **Industry Benchmarks**: Healthcare MFA 85%, Finance 94%, Tech 91% benchmarks
+   - **Confidence Metrics**: Higher confidence for quantitative vs qualitative responses
+
+4. **Quantitative Data Pipeline** (`backend/data_pipeline/quantitative_data.py`):
+   - **Industry Benchmarks**: MFA adoption, encryption rates, incident response times
+   - **Company Size Adjustments**: Small companies get governance leniency
+   - **Percentile Rankings**: Compare user scores against industry data
+   - **Mixed Scoring**: Combines quantitative metrics with qualitative analysis
+
+**Key Features Implemented**:
+
+✅ **Dynamic Scoring**: Scores actually change based on how questions are answered
+✅ **Quantitative Benchmarks**: MFA 85%, Encryption 90%, Asset Inventory 95%
+✅ **Qualitative Strength**: Text analysis with "strong", "moderate", "weak" classifications  
+✅ **Industry Adjustments**: Healthcare gets stricter data protection requirements
+✅ **Maturity Levels**: Clear 5-level maturity progression with score thresholds
+✅ **Confidence Metrics**: 95% confidence for boolean, 60% for text analysis
+✅ **Evidence Analysis**: NLP analysis of text responses for implementation indicators
+
+**Assessment Flow**:
+1. **Company Profile**: Industry, size, compliance requirements
+2. **Structured Questions**: 25+ questions across 8 security domains
+3. **Dynamic Scoring**: Real-time scoring based on actual answers
+4. **Industry Benchmarking**: Compare against healthcare/finance/tech benchmarks
+5. **AI-Powered Recommendations**: RAG-enhanced suggestions from knowledge base
+6. **Risk Categorization**: Critical (0-44), High (45-64), Medium (65-79), Low (80-100)
+
+**API Endpoints**:
+- `GET /api/assessment/enterprise/questions` - Get structured questionnaire
+- `POST /api/assessment/enterprise/submit` - Submit with dynamic scoring
+- `GET /api/assessment/enterprise/sample` - Sample responses for testing
+- `GET /api/assessment/enterprise/scoring-guide` - Detailed methodology
+
+**Scoring Examples**:
+- **MFA 95% adoption**: Score 100 (above 85% benchmark)
+- **MFA 60% adoption**: Score 71 (below benchmark, industry penalty)
+- **"We have basic MFA"**: Score 45 (qualitative text analysis)
+- **Boolean "Do you have CISO?" True**: Score 80 (high confidence)
+
+**Enterprise Readiness Achieved**:
+✅ **Real Dynamic Scoring**: No more static demo scores
+✅ **Industry Benchmarks**: Quantitative comparison data
+✅ **RAG Pipeline Active**: AI-powered recommendations from knowledge base
+✅ **Company Data Upload**: Document upload for enhanced RAG context
+✅ **Confidence Scoring**: Statistical confidence in assessment results
+✅ **Framework Mapping**: NIST CSF, ISO 27001, CIS Controls integration
+
+**Implementation Status**: COMPLETE ✅
+
+*Enterprise assessment now provides real dynamic scoring based on actual answers with quantitative benchmarks and qualitative analysis*

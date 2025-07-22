@@ -2,421 +2,323 @@ import React, { useState, useEffect } from 'react';
 import type { NextPage } from 'next';
 import { useRouter } from 'next/router';
 
-// --- Type Definitions ---
-interface DashboardCard {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  category: string;
-  route: string;
-  enabled: boolean;
-  badge?: string;
-  priority: string;
-  estimated_time?: string;
-  features: string[];
-}
-
-interface DashboardProgress {
-  in_progress: boolean;
-  completed: boolean;
-  completion_percentage: number;
-  sections_completed: number;
-  total_sections: number;
-  estimated_time_remaining: string;
-}
-
-interface QuickAction {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  route: string;
-  primary: boolean;
-  enabled?: boolean;
-}
-
-interface DashboardData {
-  dashboard_info: {
-    title: string;
-    subtitle: string;
-    version: string;
-    description: string;
-  };
-  navigation_cards: DashboardCard[];
-  cards_by_category: { [key: string]: DashboardCard[] };
-  assessment_progress: DashboardProgress;
-  quick_actions: QuickAction[];
-  featured_frameworks: Array<{
-    name: string;
-    description: string;
-    coverage: string;
-    icon: string;
-  }>;
-}
-
-const MainDashboard: NextPage = () => {
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+const HomePage: NextPage = () => {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'assessment' | 'demo'>('assessment');
+  const [demoData, setDemoData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchDashboardData();
-    fetchAssessmentProgress();
-  }, []);
-
-  const fetchAssessmentProgress = async () => {
+  const loadDemoData = async () => {
+    setLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiUrl}/assessment/latest`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.status === 'in_progress') {
-          // Update dashboard data with real assessment progress
-          setDashboardData(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              assessment_progress: {
-                in_progress: true,
-                completed: false,
-                completion_percentage: data.completion_percentage || 0,
-                sections_completed: data.sections_completed || 0,
-                total_sections: 10, // Standard number of sections
-                estimated_time_remaining: calculateTimeRemaining(data.completion_percentage || 0)
-              },
-              quick_actions: prev.quick_actions.map(action => {
-                if (action.id === 'continue_assessment') {
-                  return { ...action, enabled: true };
-                }
-                return action;
-              })
-            };
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch assessment progress:', err);
-    }
-  };
-
-  const calculateTimeRemaining = (completionPercentage: number): string => {
-    const totalMinutes = 45; // Estimated total time for assessment
-    const remainingMinutes = Math.round((totalMinutes * (100 - completionPercentage)) / 100);
-    if (remainingMinutes <= 0) return "Almost done!";
-    if (remainingMinutes < 60) return `${remainingMinutes} min`;
-    const hours = Math.floor(remainingMinutes / 60);
-    const minutes = remainingMinutes % 60;
-    return `${hours}h ${minutes}m`;
-  };
-
-  const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiUrl}/`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch dashboard data: ${response.status}`);
-      }
-      const data: DashboardData = await response.json();
-      setDashboardData(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+      const response = await fetch('http://localhost:8000/api/demo/sample-assessment');
+      const data = await response.json();
+      setDemoData(data);
+    } catch (error) {
+      console.error('Error loading demo data:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleCardClick = (route: string) => {
-    if (route === '/assessment/dashboard') {
-      router.push('/assessment');
-    } else if (route === '/chat') {
-      router.push('/chat');
-    } else if (route === '/metrics') {
-      router.push('/metrics');
-    } else if (route === '/benchmarks') {
-      router.push('/benchmarks');
-    } else if (route === '/company') {
-      router.push('/company');
-    } else if (route === '/scoring') {
-      router.push('/scoring');
-    } else if (route === '/reports') {
-      router.push('/reports');
-    } else if (route === '/settings') {
-      router.push('/settings');
-    } else {
-      // Fallback for unknown routes
-      router.push(route);
-    }
+  const getRiskColor = (score: number) => {
+    if (score >= 80) return 'text-green-600 bg-green-100';
+    if (score >= 65) return 'text-yellow-600 bg-yellow-100';
+    if (score >= 45) return 'text-orange-600 bg-orange-100';
+    return 'text-red-600 bg-red-100';
   };
-
-  const handleQuickAction = (action: QuickAction) => {
-    if (!action.enabled && action.enabled !== undefined) {
-      return;
-    }
-    handleCardClick(action.route);
-  };
-
-  const getCardsByCategory = (category: string): DashboardCard[] => {
-    if (!dashboardData) return [];
-    if (category === 'all') return dashboardData.navigation_cards;
-    return dashboardData.cards_by_category[category] || [];
-  };
-
-  const getPriorityColor = (priority: string): string => {
-    switch (priority) {
-      case 'high': return 'border-red-500 bg-red-50';
-      case 'medium': return 'border-yellow-500 bg-yellow-50';
-      case 'low': return 'border-green-500 bg-green-50';
-      default: return 'border-gray-500 bg-gray-50';
-    }
-  };
-
-  const getCompletionColor = (percentage: number): string => {
-    if (percentage >= 100) return 'text-green-600';
-    if (percentage >= 50) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-400 mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading RiskAI Dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 flex items-center justify-center">
-        <div className="text-center p-8 bg-red-900/50 rounded-lg max-w-md">
-          <h2 className="text-red-400 text-xl font-bold mb-2">Error Loading Dashboard</h2>
-          <p className="text-red-300 mb-4">{error}</p>
-          <button
-            onClick={fetchDashboardData}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!dashboardData) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 flex items-center justify-center">
-        <p className="text-white text-lg">No dashboard data available</p>
-      </div>
-    );
-  }
-
-  const categories = ['all', ...Object.keys(dashboardData.cards_by_category)];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 text-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="p-6 bg-gray-900/80 backdrop-blur-md shadow-lg">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent mb-2">
-            {dashboardData.dashboard_info.title}
-          </h1>
-          <p className="text-gray-300 text-lg mb-4">{dashboardData.dashboard_info.subtitle}</p>
-          <p className="text-gray-400">{dashboardData.dashboard_info.description}</p>
-        </div>
-      </header>
-
-      {/* Assessment Progress Banner */}
-      {dashboardData.assessment_progress && dashboardData.assessment_progress.in_progress && (
-        <div className="bg-indigo-900/50 border-l-4 border-indigo-400 p-4 mx-6 mt-6 rounded-r-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-indigo-300 font-semibold">Assessment In Progress</h3>
-              <p className="text-gray-300">
-                {dashboardData.assessment_progress.sections_completed} of {dashboardData.assessment_progress.total_sections} sections completed
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className={`text-2xl font-bold ${getCompletionColor(dashboardData.assessment_progress.completion_percentage)}`}>
-                  {dashboardData.assessment_progress.completion_percentage.toFixed(0)}%
-                </div>
-                <div className="text-sm text-gray-400">
-                  {dashboardData.assessment_progress.estimated_time_remaining} remaining
-                </div>
-              </div>
-              <button
-                onClick={() => router.push('/assessment')}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold transition"
-              >
-                Continue Assessment
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Quick Actions */}
-      <div className="p-6">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            {dashboardData.quick_actions.filter(action => action.id !== 'start_assessment').map((action) => (
-              <button
-                key={action.id}
-                onClick={() => handleQuickAction(action)}
-                disabled={action.enabled === false}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 ${
-                  action.primary
-                    ? 'bg-indigo-600 border-indigo-500 hover:bg-indigo-700 text-white'
-                    : 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300'
-                } ${
-                  action.enabled === false ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                }`}
-              >
-                <div className="text-2xl mb-2">{action.icon}</div>
-                <h3 className="font-semibold mb-1">{action.title}</h3>
-                <p className="text-sm opacity-90">{action.description}</p>
-              </button>
-            ))}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="py-6">
+            <h1 className="text-3xl font-bold text-gray-900">RiskAI Enterprise Platform</h1>
+            <p className="mt-2 text-gray-600">
+              AI-powered cybersecurity risk assessment with dynamic scoring and industry benchmarks
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Category Filter */}
-      <div className="px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-wrap gap-2 mb-6">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-4 py-2 rounded-lg transition ${
-                  selectedCategory === category
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                {category === 'all' ? 'All Features' : category}
-              </button>
-            ))}
-          </div>
+      {/* Tab Navigation */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('assessment')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'assessment'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              🛡️ Security Assessment
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('demo');
+                if (!demoData) loadDemoData();
+              }}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'demo'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              📊 Demo Data
+            </button>
+          </nav>
         </div>
       </div>
 
-      {/* Main Dashboard Cards */}
-      <div className="p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {getCardsByCategory(selectedCategory).map((card) => (
-              <div
-                key={card.id}
-                onClick={() => card.enabled && handleCardClick(card.route)}
-                className={`bg-gray-800/60 backdrop-blur-md rounded-xl p-8 border-2 transition-all duration-300 cursor-pointer hover:bg-gray-700/70 hover:scale-105 hover:shadow-2xl ${getPriorityColor(card.priority)} ${
-                  !card.enabled ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                <div className="flex items-start justify-between mb-6">
-                  <div className="text-5xl">{card.icon}</div>
-                  <div className="flex flex-col items-end gap-2">
-                    {card.badge && (
-                      <span className="px-3 py-1 bg-indigo-600 text-white text-sm rounded-full font-medium">
-                        {card.badge}
-                      </span>
-                    )}
-                    <span className={`px-3 py-1 text-sm rounded-full font-medium ${
-                      card.priority === 'high' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 
-                      card.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' : 
-                      'bg-green-500/20 text-green-300 border border-green-500/30'
-                    }`}>
-                      {card.priority} priority
-                    </span>
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'assessment' && (
+          <div className="space-y-6">
+            {/* Assessment Card */}
+            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                    🔍 Enterprise Security Assessment
+                  </h2>
+                  <p className="text-gray-600 mb-4">
+                    Complete cybersecurity risk assessment with dynamic scoring based on industry benchmarks
+                  </p>
+                  
+                  <div className="grid md:grid-cols-2 gap-4 mb-6">
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-gray-900">✨ Features:</h3>
+                      <ul className="text-sm text-gray-600 space-y-1">
+                        <li>• Dynamic scoring based on actual answers</li>
+                        <li>• Industry-specific benchmarks (Healthcare, Finance, Tech)</li>
+                        <li>• 120 comprehensive enterprise questions</li>
+                        <li>• AI-powered recommendations</li>
+                        <li>• Statistical confidence intervals</li>
+                      </ul>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-gray-900">📋 Assessment Covers:</h3>
+                      <ul className="text-sm text-gray-600 space-y-1">
+                        <li>• Governance & Risk Management</li>
+                        <li>• Access Control & Identity</li>
+                        <li>• Data Protection & Privacy</li>
+                        <li>• Security Monitoring</li>
+                        <li>• Incident Response</li>
+                        <li>• Business Continuity</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={() => router.push('/real-assessment')}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                    >
+                      Start Assessment
+                    </button>
+                    <a
+                      href="http://localhost:8000/api/assessment/enterprise/questions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+                    >
+                      View API
+                    </a>
                   </div>
                 </div>
-                
-                <h3 className="text-2xl font-bold mb-3 text-white">{card.title}</h3>
-                <p className="text-gray-300 mb-6 text-lg leading-relaxed">{card.description}</p>
-                
-                <div className="grid grid-cols-1 gap-4 mb-6">
-                  {card.estimated_time && (
-                    <div className="flex items-center text-gray-400 bg-gray-700/50 rounded-lg px-4 py-2">
-                      <span className="text-lg mr-3">⏱️</span>
-                      <span className="font-medium">{card.estimated_time}</span>
+                <div className="ml-6 text-6xl">
+                  🛡️
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-lg shadow p-6 text-center">
+                <div className="text-3xl font-bold text-blue-600">120</div>
+                <div className="text-sm text-gray-600">Comprehensive Questions</div>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6 text-center">
+                <div className="text-3xl font-bold text-green-600">8</div>
+                <div className="text-sm text-gray-600">Security Domains</div>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6 text-center">
+                <div className="text-3xl font-bold text-purple-600">5</div>
+                <div className="text-sm text-gray-600">Maturity Levels</div>
+              </div>
+            </div>
+
+            {/* Methodology */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h3 className="text-xl font-bold mb-4">🧮 Mathematical Scoring Methodology</h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-semibold mb-2">Dynamic Scoring Types:</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li><strong>Quantitative:</strong> Percentage-based with industry benchmarks</li>
+                    <li><strong>Qualitative:</strong> Text analysis with maturity indicators</li>
+                    <li><strong>Scale:</strong> 1-10 ratings with normalization</li>
+                    <li><strong>Boolean:</strong> Yes/No with confidence scoring</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold mb-2">Industry Benchmarks:</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li><strong>Healthcare MFA:</strong> 85% adoption benchmark</li>
+                    <li><strong>Finance MFA:</strong> 94% adoption benchmark</li>
+                    <li><strong>Tech Encryption:</strong> 88% coverage benchmark</li>
+                    <li><strong>Response Time:</strong> Industry-specific SLAs</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="mt-4">
+                <a
+                  href="/MATHEMATICAL_SCORING_METHODOLOGY.md"
+                  target="_blank"
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  📖 View Full Mathematical Methodology →
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'demo' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">📊 Demo Assessment Data</h2>
+                <button
+                  onClick={loadDemoData}
+                  disabled={loading}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? 'Loading...' : 'Refresh Demo Data'}
+                </button>
+              </div>
+
+              {demoData ? (
+                <div className="space-y-6">
+                  {/* Demo Overview */}
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 rounded-lg p-4 text-center">
+                      <div className={`text-3xl font-bold ${getRiskColor(demoData.overall_score).split(' ')[0]}`}>
+                        {demoData.overall_score}
+                      </div>
+                      <div className="text-sm text-gray-600">Overall Score</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4 text-center">
+                      <div className={`text-lg font-semibold ${getRiskColor(demoData.overall_score).split(' ')[0]}`}>
+                        {demoData.risk_level}
+                      </div>
+                      <div className="text-sm text-gray-600">Risk Level</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4 text-center">
+                      <div className="text-lg font-semibold text-blue-600">
+                        {demoData.scoring_method || 'Dynamic'}
+                      </div>
+                      <div className="text-sm text-gray-600">Scoring Method</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4 text-center">
+                      <div className="text-lg font-semibold text-green-600">
+                        {demoData.industry_adjustments_applied ? 'Yes' : 'No'}
+                      </div>
+                      <div className="text-sm text-gray-600">Industry Adjusted</div>
+                    </div>
+                  </div>
+
+                  {/* Company Profile */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">🏢 Company Profile</h3>
+                    <div className="grid md:grid-cols-2 gap-4 text-sm">
+                      <div><strong>Name:</strong> {demoData.company_profile?.name}</div>
+                      <div><strong>Industry:</strong> {demoData.company_profile?.industry}</div>
+                      <div><strong>Size:</strong> {demoData.company_profile?.size}</div>
+                      <div><strong>Country:</strong> {demoData.company_profile?.country}</div>
+                    </div>
+                  </div>
+
+                  {/* Section Breakdown */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">📋 Section Breakdown</h3>
+                    <div className="space-y-3">
+                      {demoData.section_breakdown?.map((section: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                          <div>
+                            <div className="font-medium">{section.section_name}</div>
+                            <div className="text-sm text-gray-600">
+                              Weight: {Math.round(section.weight * 100)}% | 
+                              Confidence: {Math.round(section.confidence * 100)}% |
+                              Evidence: {section.evidence_strength}
+                            </div>
+                          </div>
+                          <div className={`text-xl font-bold px-3 py-1 rounded ${getRiskColor(section.score)}`}>
+                            {section.score}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Recommendations */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">💡 AI Recommendations</h3>
+                    <div className="space-y-2">
+                      {demoData.recommendations?.map((rec: string, index: number) => (
+                        <div key={index} className="flex items-start space-x-3">
+                          <div className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold">
+                            {index + 1}
+                          </div>
+                          <p className="text-sm">{rec}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Confidence Metrics */}
+                  {demoData.confidence_metrics && (
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-semibold mb-3">🎯 Confidence Metrics</h3>
+                      <div className="grid md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <strong>Overall:</strong> {Math.round(demoData.confidence_metrics.overall_confidence * 100)}%
+                        </div>
+                        <div>
+                          <strong>Min:</strong> {Math.round(demoData.confidence_metrics.min_confidence * 100)}%
+                        </div>
+                        <div>
+                          <strong>Max:</strong> {Math.round(demoData.confidence_metrics.max_confidence * 100)}%
+                        </div>
+                        <div>
+                          <strong>Std Dev:</strong> {Math.round(demoData.confidence_metrics.confidence_std * 100)}%
+                        </div>
+                      </div>
                     </div>
                   )}
-                  
-                  <div className="flex items-center text-gray-400 bg-gray-700/50 rounded-lg px-4 py-2">
-                    <span className="text-lg mr-3">📁</span>
-                    <span className="font-medium">{card.category}</span>
+
+                  {/* Demo Note */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>📝 Note:</strong> {demoData.demo_note || 'This is demonstration data showing dynamic scoring capabilities.'}
+                    </p>
                   </div>
                 </div>
-                
-                {card.features && card.features.length > 0 && (
-                  <div className="border-t border-gray-700 pt-6">
-                    <h4 className="text-lg font-semibold text-gray-300 mb-4 flex items-center">
-                      <span className="text-xl mr-2">✨</span>
-                      Key Features
-                    </h4>
-                    <ul className="text-gray-300 space-y-3">
-                      {card.features.slice(0, 4).map((feature, index) => (
-                        <li key={index} className="flex items-start">
-                          <span className="w-2 h-2 bg-indigo-400 rounded-full mr-3 mt-2 flex-shrink-0"></span>
-                          <span className="leading-relaxed">{feature}</span>
-                        </li>
-                      ))}
-                      {card.features.length > 4 && (
-                        <li className="text-gray-500 italic">
-                          +{card.features.length - 4} additional features available
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-                
-                <div className="mt-6 pt-4 border-t border-gray-700">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-400">Click to access</span>
-                    <span className="text-2xl">→</span>
-                  </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">📊</div>
+                  <p className="text-gray-600">Click "Refresh Demo Data" to load sample assessment results</p>
                 </div>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
-
-      {/* Featured Frameworks */}
-      <div className="p-6">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-2xl font-bold mb-4">Supported Frameworks</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {dashboardData.featured_frameworks.map((framework, index) => (
-              <div key={index} className="bg-gray-800 rounded-lg p-4 text-center">
-                <div className="text-3xl mb-2">{framework.icon}</div>
-                <h3 className="font-semibold text-white mb-1">{framework.name}</h3>
-                <p className="text-sm text-gray-400 mb-2">{framework.description}</p>
-                <span className="px-2 py-1 bg-indigo-600 text-white text-xs rounded">
-                  {framework.coverage}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <footer className="bg-gray-900/80 backdrop-blur-md mt-12 p-6">
-        <div className="max-w-7xl mx-auto text-center text-gray-400">
-          <p>RiskAI v{dashboardData.dashboard_info.version} - Professional Cybersecurity Risk Assessment Platform</p>
-        </div>
-      </footer>
     </div>
   );
 };
 
-export default MainDashboard;
+export default HomePage;

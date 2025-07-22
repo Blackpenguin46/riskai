@@ -1,1 +1,1 @@
-# Validation and benchmarking modules
+# Validation package

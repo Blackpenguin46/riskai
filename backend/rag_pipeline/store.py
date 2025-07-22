@@ -21,7 +21,7 @@ def store_embeddings(chunks: list[Document], embedder, persist_dir: str = "vecto
         embedding=embedder,  # ✅ Use 'embedding' instead of 'embedding_function'
         persist_directory=persist_dir
     )
-    db.persist()
+    # Note: Newer versions of Chroma auto-persist, no need to call persist()
     return db
 
 
@@ -59,5 +59,5 @@ def load_existing_embeddings(embedder, persist_dir: str = "vectordb") -> Chroma:
             embedding=embedder,
             persist_directory=persist_dir
         )
-        db.persist()
+        # Note: Newer versions of Chroma auto-persist, no need to call persist()
         return db

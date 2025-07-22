@@ -1,454 +1,550 @@
 """
-Session Management System
-
-Provides automatic session persistence, data recovery, and user state management
-for improved user experience and data continuity.
+Session Manager for RiskAI
+Handles creation, retrieval, and updating of assessment sessions
 """
 
 import logging
 import uuid
-import json
-import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, asdict
-from sqlalchemy.orm import Session
-from .database.models import SessionData, AssessmentHistory, ImprovementTracking, get_session
-import threading
-import time
+from typing import Dict, List, Optional, Any, Union
+from sqlalchemy.orm import Session as DBSession
+
+from database.models import get_session
+from database.session_models import AssessmentSession, SectionProgress, SessionResponse
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class SessionInfo:
-    """Session information"""
-    session_id: str
-    company_id: Optional[int]
-    session_type: str
-    created_at: datetime
-    last_activity: datetime
-    total_time_spent: int
-    page_views: int
-    progress_data: Dict[str, Any]
-    preferences: Dict[str, Any]
-
 class SessionManager:
-    """Manages user sessions and automatic data persistence"""
+    """Manages assessment sessions for persistence across multiple user sessions"""
     
-    def __init__(self):
-        self.active_sessions: Dict[str, SessionInfo] = {}
-        self.session_timeout = timedelta(hours=24)  # 24-hour timeout
-        self.cleanup_interval = 3600  # Clean up every hour
-        self.auto_save_interval = 300  # Auto-save every 5 minutes
+    @staticmethod
+    def create_session(assessment_id: int, user_id: Optional[str] = None) -> str:
+        """
+        Create a new assessment session
         
-        # Start background tasks
-        self._start_background_tasks()
-        
-    def _start_background_tasks(self):
-        """Start background tasks for session management"""
-        
-        # Session cleanup thread
-        cleanup_thread = threading.Thread(target=self._cleanup_expired_sessions, daemon=True)
-        cleanup_thread.start()
-        
-        # Auto-save thread
-        autosave_thread = threading.Thread(target=self._auto_save_sessions, daemon=True)
-        autosave_thread.start()
-        
-    def create_session(self, 
-                      company_id: Optional[int] = None,
-                      session_type: str = "assessment",
-                      user_agent: str = "",
-                      ip_address: str = "") -> str:
-        """Create a new session"""
-        
-        session_id = str(uuid.uuid4())
-        
-        # Create session info
-        session_info = SessionInfo(
-            session_id=session_id,
-            company_id=company_id,
-            session_type=session_type,
-            created_at=datetime.utcnow(),
-            last_activity=datetime.utcnow(),
-            total_time_spent=0,
-            page_views=0,
-            progress_data={},
-            preferences={}
-        )
-        
-        # Store in memory
-        self.active_sessions[session_id] = session_info
-        
-        # Store in database
-        db = get_session()
+        Args:
+            assessment_id: ID of the assessment
+            user_id: Optional user identifier
+            
+        Returns:
+            session_id: Unique identifier for the session
+        """
         try:
-            db_session = SessionData(
+            db = get_session()
+            
+            # Generate a unique session ID
+            session_id = f"session_{uuid.uuid4().hex}"
+            
+            # Create session record
+            session = AssessmentSession(
                 session_id=session_id,
-                company_id=company_id,
-                session_type=session_type,
-                user_agent=user_agent,
-                ip_address=ip_address,
-                expires_at=datetime.utcnow() + self.session_timeout
+                assessment_id=assessment_id,
+                user_id=user_id,
+                start_time=datetime.utcnow(),
+                last_activity=datetime.utcnow(),
+                completion_status="in_progress"
             )
-            db.add(db_session)
+            
+            db.add(session)
             db.commit()
+            db.refresh(session)
             
-            logger.info(f"Created new session: {session_id}")
-            
-        except Exception as e:
-            logger.error(f"Error creating session in database: {e}")
-            db.rollback()
-        finally:
-            db.close()
-            
-        return session_id
-    
-    def get_session(self, session_id: str) -> Optional[SessionInfo]:
-        """Get session information"""
-        
-        # Check memory first
-        if session_id in self.active_sessions:
-            return self.active_sessions[session_id]
-            
-        # Load from database
-        db = get_session()
-        try:
-            db_session = db.query(SessionData).filter(
-                SessionData.session_id == session_id
-            ).first()
-            
-            if db_session and db_session.expires_at > datetime.utcnow():
-                # Load into memory
-                session_info = SessionInfo(
-                    session_id=db_session.session_id,
-                    company_id=db_session.company_id,
-                    session_type=db_session.session_type,
-                    created_at=db_session.created_at,
-                    last_activity=db_session.last_activity,
-                    total_time_spent=db_session.total_time_spent or 0,
-                    page_views=db_session.page_views or 0,
-                    progress_data=db_session.progress_data or {},
-                    preferences=db_session.preferences or {}
-                )
-                
-                self.active_sessions[session_id] = session_info
-                return session_info
-                
-        except Exception as e:
-            logger.error(f"Error loading session from database: {e}")
-        finally:
-            db.close()
-            
-        return None
-    
-    def update_session_activity(self, session_id: str, page: str = "", time_spent: int = 0):
-        """Update session activity"""
-        
-        session_info = self.get_session(session_id)
-        if not session_info:
-            return
-            
-        # Update in memory
-        session_info.last_activity = datetime.utcnow()
-        session_info.page_views += 1
-        session_info.total_time_spent += time_spent
-        
-        # Update database
-        db = get_session()
-        try:
-            db_session = db.query(SessionData).filter(
-                SessionData.session_id == session_id
-            ).first()
-            
-            if db_session:
-                db_session.last_activity = datetime.utcnow()
-                db_session.page_views = session_info.page_views
-                db_session.total_time_spent = session_info.total_time_spent
-                db_session.current_page = page
-                db.commit()
-                
-        except Exception as e:
-            logger.error(f"Error updating session activity: {e}")
-            db.rollback()
-        finally:
-            db.close()
-    
-    def save_progress_data(self, session_id: str, progress_data: Dict[str, Any]):
-        """Save progress data for session"""
-        
-        session_info = self.get_session(session_id)
-        if not session_info:
-            return
-            
-        # Update in memory
-        session_info.progress_data.update(progress_data)
-        
-        # Update database
-        db = get_session()
-        try:
-            db_session = db.query(SessionData).filter(
-                SessionData.session_id == session_id
-            ).first()
-            
-            if db_session:
-                db_session.progress_data = session_info.progress_data
-                db.commit()
-                
-        except Exception as e:
-            logger.error(f"Error saving progress data: {e}")
-            db.rollback()
-        finally:
-            db.close()
-    
-    def get_progress_data(self, session_id: str) -> Dict[str, Any]:
-        """Get progress data for session"""
-        
-        session_info = self.get_session(session_id)
-        if session_info:
-            return session_info.progress_data
-        return {}
-    
-    def save_preferences(self, session_id: str, preferences: Dict[str, Any]):
-        """Save user preferences"""
-        
-        session_info = self.get_session(session_id)
-        if not session_info:
-            return
-            
-        # Update in memory
-        session_info.preferences.update(preferences)
-        
-        # Update database
-        db = get_session()
-        try:
-            db_session = db.query(SessionData).filter(
-                SessionData.session_id == session_id
-            ).first()
-            
-            if db_session:
-                db_session.preferences = session_info.preferences
-                db.commit()
-                
-        except Exception as e:
-            logger.error(f"Error saving preferences: {e}")
-            db.rollback()
-        finally:
-            db.close()
-    
-    def get_preferences(self, session_id: str) -> Dict[str, Any]:
-        """Get user preferences"""
-        
-        session_info = self.get_session(session_id)
-        if session_info:
-            return session_info.preferences
-        return {}
-    
-    def recover_session_data(self, session_id: str) -> Dict[str, Any]:
-        """Recover all session data for resuming"""
-        
-        session_info = self.get_session(session_id)
-        if not session_info:
-            return {"error": "Session not found"}
-            
-        # Get additional data from database
-        db = get_session()
-        try:
-            # Get recent assessment history
-            assessment_history = db.query(AssessmentHistory).filter(
-                AssessmentHistory.company_id == session_info.company_id
-            ).order_by(AssessmentHistory.snapshot_date.desc()).limit(5).all()
-            
-            # Get improvement tracking
-            improvements = db.query(ImprovementTracking).filter(
-                ImprovementTracking.company_id == session_info.company_id,
-                ImprovementTracking.status.in_(['in_progress', 'planned'])
-            ).all()
-            
-            return {
-                "session_info": asdict(session_info),
-                "progress_data": session_info.progress_data,
-                "preferences": session_info.preferences,
-                "assessment_history": [
-                    {
-                        "id": h.id,
-                        "snapshot_date": h.snapshot_date.isoformat(),
-                        "overall_score": h.overall_score,
-                        "maturity_level": h.maturity_level,
-                        "section_scores": h.section_scores
-                    } for h in assessment_history
-                ],
-                "active_improvements": [
-                    {
-                        "id": i.id,
-                        "name": i.initiative_name,
-                        "status": i.status,
-                        "progress": i.impact_percentage or 0,
-                        "target_date": i.target_date.isoformat() if i.target_date else None
-                    } for i in improvements
-                ]
-            }
-            
-        except Exception as e:
-            logger.error(f"Error recovering session data: {e}")
-            return {"error": "Failed to recover session data"}
-        finally:
-            db.close()
-    
-    def delete_session(self, session_id: str):
-        """Delete a session"""
-        
-        # Remove from memory
-        if session_id in self.active_sessions:
-            del self.active_sessions[session_id]
-            
-        # Remove from database
-        db = get_session()
-        try:
-            db_session = db.query(SessionData).filter(
-                SessionData.session_id == session_id
-            ).first()
-            
-            if db_session:
-                db.delete(db_session)
-                db.commit()
-                
-        except Exception as e:
-            logger.error(f"Error deleting session: {e}")
-            db.rollback()
-        finally:
-            db.close()
-    
-    def _cleanup_expired_sessions(self):
-        """Background task to clean up expired sessions"""
-        
-        while True:
-            try:
-                time.sleep(self.cleanup_interval)
-                
-                db = get_session()
-                try:
-                    # Find expired sessions
-                    expired_sessions = db.query(SessionData).filter(
-                        SessionData.expires_at < datetime.utcnow()
-                    ).all()
-                    
-                    for session in expired_sessions:
-                        # Remove from memory
-                        if session.session_id in self.active_sessions:
-                            del self.active_sessions[session.session_id]
-                        
-                        # Remove from database
-                        db.delete(session)
-                    
-                    db.commit()
-                    
-                    if expired_sessions:
-                        logger.info(f"Cleaned up {len(expired_sessions)} expired sessions")
-                        
-                except Exception as e:
-                    logger.error(f"Error cleaning up sessions: {e}")
-                    db.rollback()
-                finally:
-                    db.close()
-                    
-            except Exception as e:
-                logger.error(f"Error in cleanup thread: {e}")
-    
-    def _auto_save_sessions(self):
-        """Background task to auto-save active sessions"""
-        
-        while True:
-            try:
-                time.sleep(self.auto_save_interval)
-                
-                if not self.active_sessions:
-                    continue
-                    
-                db = get_session()
-                try:
-                    for session_id, session_info in self.active_sessions.items():
-                        db_session = db.query(SessionData).filter(
-                            SessionData.session_id == session_id
-                        ).first()
-                        
-                        if db_session:
-                            db_session.last_activity = session_info.last_activity
-                            db_session.total_time_spent = session_info.total_time_spent
-                            db_session.page_views = session_info.page_views
-                            db_session.progress_data = session_info.progress_data
-                            db_session.preferences = session_info.preferences
-                    
-                    db.commit()
-                    logger.debug(f"Auto-saved {len(self.active_sessions)} sessions")
-                    
-                except Exception as e:
-                    logger.error(f"Error auto-saving sessions: {e}")
-                    db.rollback()
-                finally:
-                    db.close()
-                    
-            except Exception as e:
-                logger.error(f"Error in auto-save thread: {e}")
-    
-    def get_session_analytics(self, session_id: str) -> Dict[str, Any]:
-        """Get analytics for a session"""
-        
-        session_info = self.get_session(session_id)
-        if not session_info:
-            return {"error": "Session not found"}
-            
-        # Calculate analytics
-        duration = datetime.utcnow() - session_info.created_at
-        avg_time_per_page = (session_info.total_time_spent / session_info.page_views) if session_info.page_views > 0 else 0
-        
-        return {
-            "session_duration": duration.total_seconds(),
-            "total_time_spent": session_info.total_time_spent,
-            "page_views": session_info.page_views,
-            "average_time_per_page": avg_time_per_page,
-            "session_type": session_info.session_type,
-            "progress_completion": len(session_info.progress_data)
-        }
-    
-    def export_session_data(self, session_id: str) -> Optional[str]:
-        """Export session data as JSON"""
-        
-        session_data = self.recover_session_data(session_id)
-        if "error" in session_data:
-            return None
-            
-        try:
-            return json.dumps(session_data, indent=2, default=str)
-        except Exception as e:
-            logger.error(f"Error exporting session data: {e}")
-            return None
-    
-    def import_session_data(self, session_data: str) -> Optional[str]:
-        """Import session data and create new session"""
-        
-        try:
-            data = json.loads(session_data)
-            
-            # Create new session
-            session_id = self.create_session(
-                company_id=data.get("session_info", {}).get("company_id"),
-                session_type=data.get("session_info", {}).get("session_type", "assessment")
-            )
-            
-            # Restore progress data
-            if "progress_data" in data:
-                self.save_progress_data(session_id, data["progress_data"])
-                
-            # Restore preferences
-            if "preferences" in data:
-                self.save_preferences(session_id, data["preferences"])
-                
+            logger.info(f"Created new session {session_id} for assessment {assessment_id}")
             return session_id
             
         except Exception as e:
-            logger.error(f"Error importing session data: {e}")
+            logger.error(f"Error creating session: {str(e)}")
+            db.rollback()
+            raise
+        finally:
+            db.close()
+    
+    @staticmethod
+    def get_session(session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get session details by session ID
+        
+        Args:
+            session_id: Unique identifier for the session
+            
+        Returns:
+            Session details as dictionary or None if not found
+        """
+        try:
+            db = get_session()
+            
+            session = db.query(AssessmentSession).filter(
+                AssessmentSession.session_id == session_id
+            ).first()
+            
+            if not session:
+                logger.warning(f"Session {session_id} not found")
+                return None
+            
+            # Update last activity
+            session.last_activity = datetime.utcnow()
+            db.commit()
+            
+            return session.to_dict()
+            
+        except Exception as e:
+            logger.error(f"Error retrieving session {session_id}: {str(e)}")
             return None
+        finally:
+            db.close()
+    
+    @staticmethod
+    def update_session(session_id: str, update_data: Dict[str, Any]) -> bool:
+        """
+        Update session details
+        
+        Args:
+            session_id: Unique identifier for the session
+            update_data: Dictionary of fields to update
+            
+        Returns:
+            Success status
+        """
+        try:
+            db = get_session()
+            
+            session = db.query(AssessmentSession).filter(
+                AssessmentSession.session_id == session_id
+            ).first()
+            
+            if not session:
+                logger.warning(f"Session {session_id} not found for update")
+                return False
+            
+            # Update allowed fields
+            allowed_fields = [
+                "current_section", "current_question", "completion_status", "state_data"
+            ]
+            
+            for field in allowed_fields:
+                if field in update_data:
+                    setattr(session, field, update_data[field])
+            
+            # Always update last activity
+            session.last_activity = datetime.utcnow()
+            
+            db.commit()
+            logger.info(f"Updated session {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating session {session_id}: {str(e)}")
+            db.rollback()
+            return False
+        finally:
+            db.close()
+    
+    @staticmethod
+    def save_response(session_id: str, question_id: str, section_id: str, 
+                     response_value: Any, response_type: Optional[str] = None,
+                     time_spent_seconds: Optional[int] = None) -> bool:
+        """
+        Save a question response
+        
+        Args:
+            session_id: Unique identifier for the session
+            question_id: Question identifier
+            section_id: Section identifier
+            response_value: User's response
+            response_type: Type of response (text, choice, etc.)
+            time_spent_seconds: Time spent on the question
+            
+        Returns:
+            Success status
+        """
+        try:
+            db = get_session()
+            
+            # Get session
+            session = db.query(AssessmentSession).filter(
+                AssessmentSession.session_id == session_id
+            ).first()
+            
+            if not session:
+                logger.warning(f"Session {session_id} not found for saving response")
+                return False
+            
+            # Check if response already exists
+            existing_response = db.query(SessionResponse).filter(
+                SessionResponse.session_id == session.id,
+                SessionResponse.question_id == question_id
+            ).first()
+            
+            if existing_response:
+                # Update existing response
+                existing_response.response_value = str(response_value)
+                existing_response.response_type = response_type
+                existing_response.response_time = datetime.utcnow()
+                if time_spent_seconds:
+                    existing_response.time_spent_seconds = time_spent_seconds
+            else:
+                # Create new response
+                response = SessionResponse(
+                    session_id=session.id,
+                    question_id=question_id,
+                    section_id=section_id,
+                    response_value=str(response_value),
+                    response_type=response_type,
+                    response_time=datetime.utcnow(),
+                    time_spent_seconds=time_spent_seconds
+                )
+                db.add(response)
+            
+            # Update session
+            session.last_activity = datetime.utcnow()
+            session.current_question = question_id
+            session.current_section = section_id
+            
+            # Update section progress
+            SessionManager._update_section_progress(db, session.id, section_id, question_id)
+            
+            db.commit()
+            logger.info(f"Saved response for question {question_id} in session {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving response in session {session_id}: {str(e)}")
+            db.rollback()
+            return False
+        finally:
+            db.close()
+    
+    @staticmethod
+    def _update_section_progress(db: DBSession, session_id: int, section_id: str, question_id: str) -> None:
+        """
+        Update section progress after saving a response
+        
+        Args:
+            db: Database session
+            session_id: Session ID (database ID, not session_id string)
+            section_id: Section identifier
+            question_id: Question identifier
+        """
+        # Get or create section progress
+        section_progress = db.query(SectionProgress).filter(
+            SectionProgress.session_id == session_id,
+            SectionProgress.section_id == section_id
+        ).first()
+        
+        if not section_progress:
+            # Create new section progress
+            section_progress = SectionProgress(
+                session_id=session_id,
+                section_id=section_id,
+                completion_percentage=0.0,
+                completed_questions=0,
+                total_questions=0,  # Will be updated when we know the total
+                last_question_answered=question_id
+            )
+            db.add(section_progress)
+        else:
+            # Update existing section progress
+            section_progress.last_question_answered = question_id
+        
+        # Count responses for this section
+        response_count = db.query(SessionResponse).filter(
+            SessionResponse.session_id == session_id,
+            SessionResponse.section_id == section_id
+        ).count()
+        
+        # Update completion data
+        section_progress.completed_questions = response_count
+        
+        # If we know the total questions, update percentage
+        if section_progress.total_questions > 0:
+            section_progress.completion_percentage = (
+                response_count / section_progress.total_questions
+            ) * 100.0
+    
+    @staticmethod
+    def complete_section(session_id: str, section_id: str, total_questions: int) -> bool:
+        """
+        Mark a section as complete
+        
+        Args:
+            session_id: Unique identifier for the session
+            section_id: Section identifier
+            total_questions: Total number of questions in the section
+            
+        Returns:
+            Success status
+        """
+        try:
+            db = get_session()
+            
+            # Get session
+            session = db.query(AssessmentSession).filter(
+                AssessmentSession.session_id == session_id
+            ).first()
+            
+            if not session:
+                logger.warning(f"Session {session_id} not found for completing section")
+                return False
+            
+            # Get section progress
+            section_progress = db.query(SectionProgress).filter(
+                SectionProgress.session_id == session.id,
+                SectionProgress.section_id == section_id
+            ).first()
+            
+            if not section_progress:
+                # Create new section progress
+                section_progress = SectionProgress(
+                    session_id=session.id,
+                    section_id=section_id,
+                    completion_percentage=100.0,
+                    completed_questions=total_questions,
+                    total_questions=total_questions,
+                    is_complete=True,
+                    completed_at=datetime.utcnow()
+                )
+                db.add(section_progress)
+            else:
+                # Update existing section progress
+                section_progress.total_questions = total_questions
+                section_progress.completion_percentage = 100.0
+                section_progress.is_complete = True
+                section_progress.completed_at = datetime.utcnow()
+            
+            # Update session
+            session.last_activity = datetime.utcnow()
+            
+            db.commit()
+            logger.info(f"Marked section {section_id} as complete in session {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error completing section in session {session_id}: {str(e)}")
+            db.rollback()
+            return False
+        finally:
+            db.close()
+    
+    @staticmethod
+    def get_user_sessions(user_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all sessions for a user
+        
+        Args:
+            user_id: User identifier
+            
+        Returns:
+            List of session details
+        """
+        try:
+            db = get_session()
+            
+            sessions = db.query(AssessmentSession).filter(
+                AssessmentSession.user_id == user_id
+            ).order_by(AssessmentSession.last_activity.desc()).all()
+            
+            return [session.to_dict() for session in sessions]
+            
+        except Exception as e:
+            logger.error(f"Error retrieving sessions for user {user_id}: {str(e)}")
+            return []
+        finally:
+            db.close()
+    
+    @staticmethod
+    def get_incomplete_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get all incomplete sessions, optionally filtered by user
+        
+        Args:
+            user_id: Optional user identifier
+            
+        Returns:
+            List of session details
+        """
+        try:
+            db = get_session()
+            
+            query = db.query(AssessmentSession).filter(
+                AssessmentSession.completion_status == "in_progress"
+            )
+            
+            if user_id:
+                query = query.filter(AssessmentSession.user_id == user_id)
+            
+            sessions = query.order_by(AssessmentSession.last_activity.desc()).all()
+            
+            return [session.to_dict() for session in sessions]
+            
+        except Exception as e:
+            logger.error(f"Error retrieving incomplete sessions: {str(e)}")
+            return []
+        finally:
+            db.close()
+    
+    @staticmethod
+    def resume_session(session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Resume an existing session
+        
+        Args:
+            session_id: Unique identifier for the session
+            
+        Returns:
+            Session details or None if not found
+        """
+        try:
+            db = get_session()
+            
+            session = db.query(AssessmentSession).filter(
+                AssessmentSession.session_id == session_id
+            ).first()
+            
+            if not session:
+                logger.warning(f"Session {session_id} not found for resuming")
+                return None
+            
+            # Check if session is expired (inactive for more than 24 hours)
+            if datetime.utcnow() - session.last_activity > timedelta(hours=24):
+                logger.warning(f"Session {session_id} has expired")
+                return None
+            
+            # Update last activity
+            session.last_activity = datetime.utcnow()
+            db.commit()
+            
+            return session.to_dict()
+            
+        except Exception as e:
+            logger.error(f"Error resuming session {session_id}: {str(e)}")
+            return None
+        finally:
+            db.close()
+    
+    @staticmethod
+    def auto_save_session(session_id: str, current_question: str, current_section: str, 
+                         auto_save_data: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Auto-save session state for recovery
+        
+        Args:
+            session_id: Unique identifier for the session
+            current_question: Current question being answered
+            current_section: Current section being worked on
+            auto_save_data: Additional data to save
+            
+        Returns:
+            Success status
+        """
+        try:
+            db = get_session()
+            
+            session = db.query(AssessmentSession).filter(
+                AssessmentSession.session_id == session_id
+            ).first()
+            
+            if not session:
+                logger.warning(f"Session {session_id} not found for auto-save")
+                return False
+            
+            # Update session state
+            session.current_question = current_question
+            session.current_section = current_section
+            session.last_activity = datetime.utcnow()
+            
+            # Update state data if provided
+            if auto_save_data:
+                if session.state_data:
+                    session.state_data.update(auto_save_data)
+                else:
+                    session.state_data = auto_save_data
+            
+            db.commit()
+            logger.debug(f"Auto-saved session {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error auto-saving session {session_id}: {str(e)}")
+            db.rollback()
+            return False
+        finally:
+            db.close()
+    
+    @staticmethod
+    def cleanup_expired_sessions(hours: int = 24) -> int:
+        """
+        Clean up sessions that have been inactive for more than specified hours
+        
+        Args:
+            hours: Number of hours of inactivity before cleanup
+            
+        Returns:
+            Number of sessions cleaned up
+        """
+        try:
+            db = get_session()
+            
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            
+            # Find expired sessions
+            expired_sessions = db.query(AssessmentSession).filter(
+                AssessmentSession.last_activity < cutoff_time,
+                AssessmentSession.completion_status == "in_progress"
+            ).all()
+            
+            count = len(expired_sessions)
+            
+            # Mark as abandoned instead of deleting
+            for session in expired_sessions:
+                session.completion_status = "abandoned"
+            
+            db.commit()
+            logger.info(f"Cleaned up {count} expired sessions")
+            return count
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up expired sessions: {str(e)}")
+            db.rollback()
+            return 0
+        finally:
+            db.close()
+    
+    @staticmethod
+    def complete_session(session_id: str) -> bool:
+        """
+        Mark a session as complete
+        
+        Args:
+            session_id: Unique identifier for the session
+            
+        Returns:
+            Success status
+        """
+        try:
+            db = get_session()
+            
+            session = db.query(AssessmentSession).filter(
+                AssessmentSession.session_id == session_id
+            ).first()
+            
+            if not session:
+                logger.warning(f"Session {session_id} not found for completion")
+                return False
+            
+            # Update session
+            session.completion_status = "completed"
+            session.last_activity = datetime.utcnow()
+            
+            db.commit()
+            logger.info(f"Marked session {session_id} as complete")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error completing session {session_id}: {str(e)}")
+            db.rollback()
+            return False
+        finally:
+            db.close()
 
-# Global session manager instance
+# Create a global instance
 session_manager = SessionManager()
