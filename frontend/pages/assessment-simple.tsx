@@ -12,8 +12,8 @@ const AssessmentSimple: React.FC = () => {
             This is a simplified assessment page for the research demo.
           </p>
           <div className="text-center">
-            <a 
-              href="/research-demo" 
+            <a
+              href="/research-demo"
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               Go to Research Demo

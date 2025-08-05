@@ -80,3 +80,72 @@ coverage.xml
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Test files and development utilities
+test_*.py
+*_test.py
+testing_plan.md
+test_installation.py
+test_riskai_services.sh
+
+# Documentation (keep only essential docs)
+COMPETITIVE_ANALYSIS.md
+PERFORMANCE_BENCHMARKS.md
+SCORING_METHODOLOGY.md
+USER_GUIDE.md
+MATHEMATICAL_SCORING_METHODOLOGY.md
+DOCKER_DEPLOYMENT.md
+DEPLOYMENT_GUIDE.md
+DEPLOYMENT.md
+INSTALLATION.md
+QUICK_START_ENTERPRISE.md
+docker_single_command_summary.md
+RiskAI_Strategic_Advantages.md
+security.md
+CONTRIBUTING.md
+tech-stack.md
+DATA_PERSISTENCE.md
+
+# Build and distribution files
+build_standalone.py
+create_distribution.py
+install_riskai.py
+riskai_portable_darwin.zip
+
+# Multiple startup scripts (keep only essential ones)
+start_riskai 2.py
+start_riskai_docker.bat
+start_riskai_docker.sh
+start_riskai.py
+start_riskai.sh
+start-research-demo.sh
+start-riskai-dev.bat
+start-riskai-dev.sh
+start-riskai-simple.py
+start-riskai.bat
+start-riskai.sh
+
+# Screenshots and large files
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.zip
+
+# Test data files
+frontend_test_data.json
+*test_data*
+
+# Temporary backend files
+backend/simple_api.py
+backend/new_venv/
+backend/venv/
+
+# Database and data directories
+backend/database_data/
+backend/vectordb/
+backend/uploads/
+backend/company_data/
+
+# Cache directories
+backend/__pycache__/

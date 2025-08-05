@@ -124,8 +124,11 @@ const CompanySetupPage: NextPage = () => {
       await response.json();
       setSaveSuccess(true);
       
-      // Auto-hide success message after 3 seconds
-      setTimeout(() => setSaveSuccess(false), 3000);
+      // Auto-hide success message after 3 seconds and redirect to assessment
+      setTimeout(() => {
+        setSaveSuccess(false);
+        router.push('/real-assessment');
+      }, 2000);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save company data');
