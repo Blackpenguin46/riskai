@@ -81,30 +81,56 @@ coverage.xml
 .dmypy.json
 dmypy.json
 
-# Test files and development utilities
+# Test files and development utilities (comprehensive)
 test_*.py
 *_test.py
+*test*.py
 testing_plan.md
 test_installation.py
 test_riskai_services.sh
+*test*
+test/
+tests/
+__tests__/
+*.test.js
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.ts
+*.spec.tsx
 
-# Documentation (keep only essential docs)
+# Development files
+*dev*
+*debug*
+*tmp*
+*temp*
+simple_api.py
+start-riskai-dev.*
+frontend_test_data.json
+
+# Documentation - Keep only production setup docs
+# Remove research, analysis, and development documentation
 COMPETITIVE_ANALYSIS.md
-PERFORMANCE_BENCHMARKS.md
+PERFORMANCE_BENCHMARKS.md  
 SCORING_METHODOLOGY.md
-USER_GUIDE.md
 MATHEMATICAL_SCORING_METHODOLOGY.md
-DOCKER_DEPLOYMENT.md
-DEPLOYMENT_GUIDE.md
-DEPLOYMENT.md
-INSTALLATION.md
-QUICK_START_ENTERPRISE.md
-docker_single_command_summary.md
 RiskAI_Strategic_Advantages.md
-security.md
 CONTRIBUTING.md
 tech-stack.md
 DATA_PERSISTENCE.md
+docker_single_command_summary.md
+testing_plan.md
+
+# Keep these essential docs for production:
+# - README.md (main project overview)
+# - INSTALLATION.md (how to install)
+# - DEPLOYMENT.md (how to deploy)
+# - DOCKER_DEPLOYMENT.md (Docker setup)
+# - QUICK_START.md (quick start guide)
+# - CHANGELOG.md (version history)
+# - LICENSE (project license)
+# - security.md (security information)
+# - USER_GUIDE.md (user documentation)
 
 # Build and distribution files
 build_standalone.py
