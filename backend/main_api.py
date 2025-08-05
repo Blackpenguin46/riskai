@@ -60,6 +60,12 @@ except ImportError as e:
     print(f"Warning: Could not import enterprise_router: {e}")
     enterprise_router = None
 
+try:
+    from chatbot.chatbot_api import router as chatbot_router
+except ImportError as e:
+    print(f"Warning: Could not import chatbot_router: {e}")
+    chatbot_router = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -97,6 +103,8 @@ if dashboard_router:
     app.include_router(dashboard_router, prefix="/api")
 if enterprise_router:
     app.include_router(enterprise_router, prefix="/api")
+if chatbot_router:
+    app.include_router(chatbot_router, prefix="/api")
 
 # Health check endpoint
 @app.get("/health")
