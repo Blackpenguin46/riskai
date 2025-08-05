@@ -51,6 +51,14 @@ node_modules/
 ehthumbs.db
 Thumbs.db
 
+# Config files
+config.yaml
+package-lock.json
+
+# Docker files (keep only docker-compose.yml and .dockerignore)
+Dockerfile.backend
+Dockerfile.frontend
+
 # Logs
 *.log
 logs/
@@ -108,29 +116,39 @@ simple_api.py
 start-riskai-dev.*
 frontend_test_data.json
 
-# Documentation - Keep only production setup docs
-# Remove research, analysis, and development documentation
+# Documentation - Keep only README.md and LICENSE
+# Remove ALL extra documentation
+CHANGELOG.md
+CONTRIBUTING.md
+DATA_PERSISTENCE.md
+DEPLOYMENT.md
+DEPLOYMENT_GUIDE.md
+DOCKER_DEPLOYMENT.md
+INSTALLATION.md
+MATHEMATICAL_SCORING_METHODOLOGY.md
+QUICK_START.md
+QUICK_START_ENTERPRISE.md
+RiskAI_Strategic_Advantages.md
+USER_GUIDE.md
+security.md
+tech-stack.md
+docker_single_command_summary.md
+testing_plan.md
 COMPETITIVE_ANALYSIS.md
 PERFORMANCE_BENCHMARKS.md  
 SCORING_METHODOLOGY.md
-MATHEMATICAL_SCORING_METHODOLOGY.md
-RiskAI_Strategic_Advantages.md
-CONTRIBUTING.md
-tech-stack.md
-DATA_PERSISTENCE.md
-docker_single_command_summary.md
-testing_plan.md
 
-# Keep these essential docs for production:
-# - README.md (main project overview)
-# - INSTALLATION.md (how to install)
-# - DEPLOYMENT.md (how to deploy)
-# - DOCKER_DEPLOYMENT.md (Docker setup)
-# - QUICK_START.md (quick start guide)
-# - CHANGELOG.md (version history)
-# - LICENSE (project license)
-# - security.md (security information)
-# - USER_GUIDE.md (user documentation)
+# Startup scripts - Keep only one main script
+start-*.sh
+start-*.bat
+start_riskai*.py
+start_riskai*.sh
+start-research-demo.sh
+start-riskai-simple.py
+start-riskai.bat
+start-riskai.sh
+start_riskai_docker.*
+test_riskai_services.sh
 
 # Build and distribution files
 build_standalone.py

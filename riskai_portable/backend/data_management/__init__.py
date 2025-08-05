@@ -1,1 +1,0 @@
-# Data management module for company-specific data integration
