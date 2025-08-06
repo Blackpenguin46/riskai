@@ -11,12 +11,13 @@ RiskAI is a comprehensive, AI-powered cybersecurity risk assessment platform des
 
 ### 🌟 Key Features
 
-- **📊 Comprehensive Assessment**: 120+ questions across 12 security domains
+- **📊 Comprehensive Assessment**: 120+ questions across 8 security domains
 - **🤖 AI-Powered Recommendations**: Personalized insights with framework attribution
+- **💬 AI Cybersecurity Consultant**: Interactive chatbot for planning and advice
 - **📈 Real-time Scoring**: Live mathematical calculations with confidence intervals
 - **📋 Professional Reporting**: Executive dashboards and detailed compliance reports
 - **🏢 Industry-Specific**: Tailored assessments for healthcare, finance, and technology sectors
-- **⚖️ Bias Detection**: Multi-dimensional fairness analysis and mitigation
+- **🐳 Docker Deployment**: One-command deployment with Docker Compose
 - **📚 Framework Integration**: NIST CSF, ISO 27001, CIS Controls, and more
 
 ## 🚀 Quick Start (One-Command Deployment)
@@ -26,25 +27,24 @@ RiskAI is a comprehensive, AI-powered cybersecurity risk assessment platform des
 - **4GB RAM** available
 - **Ports 3000 and 8000** available
 
-### 🐳 Start Platform (Choose Your Method)
+### 🐳 Start Platform (One Command)
 
-#### Option 1: Shell Script (Recommended)
+**Clone and Start:**
 ```bash
-# Linux/macOS
-./start-riskai-dev.sh
-
-# Windows
-start-riskai-dev.bat
-```
-
-#### Option 2: Python Script (Cross-platform)
-```bash
-python start-riskai-simple.py
-```
-
-#### Option 3: Docker Compose (Manual)
-```bash
+git clone https://github.com/yourusername/riskai.git
+cd riskai
 docker-compose up --build -d
+```
+
+**That's it!** The platform will:
+- ✅ Build backend and frontend containers
+- ✅ Start all services automatically  
+- ✅ Initialize the assessment system
+- ✅ Launch the AI chatbot
+
+**Check Status:**
+```bash
+docker-compose ps
 ```
 
 ### 🌐 Access Your Platform
@@ -54,7 +54,8 @@ Once started, access these URLs:
 | Service | URL | Description |
 |---------|-----|-------------|
 | **Main Dashboard** | http://localhost:3000 | Complete assessment interface |
-| **Research Demo** | http://localhost:3000/research-demo | Interactive research demonstration |
+| **AI Consultant** | http://localhost:3000/chatbot | Interactive cybersecurity chatbot |
+| **Assessment** | http://localhost:3000/real-assessment | 120-question enterprise assessment |
 | **API Documentation** | http://localhost:8000/docs | Complete API reference |
 | **Health Check** | http://localhost:8000/health | System status |
 
@@ -65,39 +66,52 @@ docker-compose down
 
 ## 📋 Assessment Domains
 
-RiskAI evaluates organizations across 12 critical security domains:
+RiskAI evaluates organizations across 8 critical security domains:
 
 | Domain | Weight | Questions | Focus Area |
 |--------|--------|-----------|------------|
-| **Governance & Risk Management** | 20% | 10 | Strategic foundation and policy framework |
-| **Data Protection** | 12% | 10 | Privacy controls and data security |
-| **Access Control** | 12% | 10 | Identity and authorization management |
-| **Security Monitoring** | 10% | 10 | Detection and response capabilities |
-| **Incident Response** | 10% | 10 | Crisis management and recovery |
-| **Asset Management** | 8% | 10 | Technical visibility and inventory |
-| **Business Continuity** | 8% | 10 | Operational resilience |
-| **Security Awareness** | 6% | 10 | Human factor considerations |
-| **Compliance** | 4% | 10 | Regulatory alignment |
-| **Emerging Technologies** | 4% | 10 | AI, IoT, cloud risk management |
-| **Third Party Risk** | 4% | 10 | Supply chain security |
-| **Risk Management Process** | 2% | 10 | Continuous improvement |
+| **Governance & Risk Management** | 25% | 15 | Strategic foundation and policy framework |
+| **Access Control & Identity** | 20% | 15 | Identity and authorization management |
+| **Data Protection & Privacy** | 15% | 15 | Privacy controls and data security |
+| **Security Monitoring** | 15% | 15 | Detection and response capabilities |
+| **Incident Response** | 10% | 15 | Crisis management and recovery |
+| **Business Continuity** | 10% | 15 | Operational resilience |
+| **Asset Management** | 3% | 15 | Technical visibility and inventory |
+| **Security Awareness** | 2% | 15 | Human factor considerations |
+
+## 💬 AI Cybersecurity Consultant
+
+The platform includes an intelligent chatbot for ongoing cybersecurity guidance:
+
+### Features:
+- **Security Planning**: Comprehensive cybersecurity strategy assistance
+- **Risk Assessment Guidance**: Help understanding and prioritizing security risks
+- **Compliance Questions**: GDPR, HIPAA, SOC 2, PCI DSS guidance
+- **Incident Response**: Planning and response strategies
+- **Implementation Advice**: Best practices for security controls
+- **Employee Training**: Security awareness program development
+
+### Usage:
+- Access via http://localhost:3000/chatbot
+- Ask questions in natural language
+- Receive expert cybersecurity advice
+- Get implementation recommendations
 
 ## 🏗️ Architecture
 
 ### Backend Components
 ```
 backend/
-├── main_api.py                          # Unified API endpoint
+├── main_api_simple.py                   # Unified API endpoint (production)
+├── main_api.py                          # Full-featured API (development)
 ├── assessment/
-│   ├── assessment_api.py                # Core assessment engine
+│   ├── enterprise_assessment_api.py     # 120-question assessment engine
 │   ├── scoring_api.py                   # Mathematical scoring system
-│   ├── question_api.py                  # Question bank management
-│   ├── comprehensive_feedback_api.py    # AI recommendation engine
-│   ├── source_attribution_api.py        # Framework attribution
-│   ├── bias_detection_api.py            # Fairness analysis
-│   └── dashboard_api.py                 # Analytics dashboard
+│   └── question_bank.py                 # Question bank management
+├── chatbot/
+│   └── chatbot_api.py                   # AI consultant chatbot
 ├── scoring/
-│   └── scoring_engine.py                # Core mathematical formulas
+│   └── dynamic_scoring_engine.py        # Real-time scoring algorithms
 └── database/
     └── models.py                        # Data persistence layer
 ```
@@ -106,19 +120,17 @@ backend/
 ```
 frontend/
 ├── pages/
-│   ├── index.tsx                        # Main dashboard
-│   ├── assessment-simple.tsx            # Assessment interface
-│   ├── research-demo.tsx                # Research demonstration
-│   ├── reports.tsx                      # Reporting dashboard
-│   └── scoring.tsx                      # Scoring visualization
+│   ├── index.tsx                        # Main dashboard with navigation
+│   ├── chatbot.tsx                      # AI consultant interface
+│   ├── real-assessment.tsx              # 120-question assessment
+│   ├── company-setup.tsx                # Company profile setup
+│   └── scoring.tsx                      # Results and reporting
 ├── components/
-│   ├── ScoringVisualization.tsx         # Interactive score displays
-│   ├── FeedbackVisualization.tsx        # AI recommendation interface
-│   └── RealTimeScoringDisplay.tsx       # Live scoring updates
+│   ├── AssessmentProgress.tsx           # Progress tracking
+│   └── QuestionNavigation.tsx           # Assessment navigation
 └── lib/
     ├── assessment-api.ts                # Assessment API client
-    ├── dashboard-api.ts                 # Dashboard API client
-    └── validation-api.ts                # Validation utilities
+    └── api.ts                           # Core API utilities
 ```
 
 ## 🔬 Research & Academic Features
@@ -294,26 +306,69 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support & Troubleshooting
 
-### Common Issues
+### Docker Deployment Issues
 
-**Docker Issues**
+**Container Startup Problems**
 ```bash
-# Reset Docker environment
-docker-compose down -v
-docker system prune -f
+# Check container status
+docker-compose ps
+
+# View container logs
+docker-compose logs backend
+docker-compose logs frontend
+
+# Restart specific service
+docker-compose restart backend
+```
+
+**Port Already in Use**
+```bash
+# Kill processes on ports 3000 and 8000
+lsof -ti:3000 | xargs kill -9
+lsof -ti:8000 | xargs kill -9
+
+# Or use different ports in docker-compose.yml
+ports:
+  - "3001:3000"  # Frontend on port 3001
+  - "8001:8000"  # Backend on port 8001
+```
+
+**Build Failures**
+```bash
+# Clean rebuild
+docker-compose down
+docker system prune -a -f
 docker-compose up --build -d
 ```
 
-**Port Conflicts**
+**Memory/Performance Issues**
+- Increase Docker Desktop memory allocation to 6GB+
+- Ensure at least 4GB free disk space
+- Close other resource-intensive applications
+
+### API Configuration
+
+**OpenAI Integration (Optional)**
+Set environment variable for AI chatbot:
 ```bash
-# Check port usage
-netstat -tulpn | grep :3000
-netstat -tulpn | grep :8000
+# In .env file or docker-compose.yml
+OPENAI_API_KEY=your_api_key_here
 ```
 
-**Memory Issues**
-- Ensure Docker has at least 4GB RAM allocated
-- Close other applications to free memory
+**Database Issues**
+```bash
+# Reset database
+docker-compose down -v
+docker-compose up -d
+```
+
+### Quick Health Check
+```bash
+# Test all services
+curl http://localhost:8000/health
+curl http://localhost:3000
+curl http://localhost:8000/api/chatbot/suggestions
+```
 
 
 ---
