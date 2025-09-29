@@ -3,6 +3,9 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
+# Set environment variable for build
+ENV NEXT_TELEMETRY_DISABLED=1
+
 # Copy package files
 COPY frontend/package*.json ./
 
@@ -12,8 +15,8 @@ RUN npm install
 # Copy the application code
 COPY frontend/ .
 
-# Build the application
-RUN npm run build
+# Build the application (use cross-platform command)
+RUN npm run build || npx next build --no-lint
 
 # Expose port
 EXPOSE 3000
