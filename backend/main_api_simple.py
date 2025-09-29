@@ -49,6 +49,47 @@ except ImportError as e:
     logger.warning(f"Could not import enterprise_router: {e}")
     enterprise_router = None
 
+# Initialize RAG pipeline for AI feedback
+rag_initialized = False
+try:
+    from rag_pipeline.embedder import SimpleEmbedder
+    from rag_pipeline.loader_simple import SimpleDocumentLoader
+    from rag_pipeline.simple_vector_store import SimpleVectorStore
+
+    logger.info("Initializing RAG pipeline...")
+
+    # Initialize components
+    embedder = SimpleEmbedder()
+    vector_store = SimpleVectorStore(persist_directory="/app/vectordb")
+
+    # Check if vector store is empty
+    if vector_store.is_empty():
+        logger.info("Vector store is empty, loading documents...")
+        loader = SimpleDocumentLoader(data_dir="/app/data")
+        documents = loader.load_documents()
+        logger.info(f"Loaded {len(documents)} documents")
+
+        # Add documents to vector store
+        for doc in documents:
+            embedding = embedder.embed(doc['content'])
+            vector_store.add(
+                id=doc['id'],
+                embedding=embedding,
+                metadata=doc['metadata'],
+                content=doc['content']
+            )
+        vector_store.persist()
+        logger.info("Documents indexed successfully")
+    else:
+        logger.info("Vector store already populated")
+
+    rag_initialized = True
+    logger.info("RAG pipeline initialized successfully")
+
+except Exception as e:
+    logger.warning(f"Could not initialize RAG pipeline: {e}")
+    logger.warning("AI feedback will use fallback responses")
+
 # Health check endpoint
 @app.get("/health")
 def health_check():

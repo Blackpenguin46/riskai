@@ -19,8 +19,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application code
 COPY backend/ .
 
+# Copy data files for RAG pipeline (knowledge base PDFs)
+COPY data/ /app/data/
+
 # Create necessary directories
-RUN mkdir -p /app/database_data /app/uploads /app/company_data
+RUN mkdir -p /app/database_data /app/uploads /app/company_data /app/vectordb
 
 # Set environment variables
 ENV PYTHONPATH=/app

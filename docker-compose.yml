@@ -8,6 +8,9 @@ services:
     environment:
       - PYTHONPATH=/app
       - ENVIRONMENT=production
+    volumes:
+      - vectordb-data:/app/vectordb
+      - backend-data:/app/database_data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -42,3 +45,4 @@ networks:
 volumes:
   backend-data:
   frontend-data:
+  vectordb-data:
