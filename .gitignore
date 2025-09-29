@@ -55,9 +55,8 @@ Thumbs.db
 config.yaml
 package-lock.json
 
-# Docker files (keep only docker-compose.yml and .dockerignore)
-Dockerfile.backend
-Dockerfile.frontend
+# Docker files (keep docker-compose.yml, .dockerignore, and Dockerfiles)
+# Dockerfile.backend and Dockerfile.frontend are needed for deployment
 
 # Logs
 *.log
