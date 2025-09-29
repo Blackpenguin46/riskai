@@ -137,17 +137,8 @@ COMPETITIVE_ANALYSIS.md
 PERFORMANCE_BENCHMARKS.md  
 SCORING_METHODOLOGY.md
 
-# Startup scripts - Keep only one main script
-start-*.sh
-start-*.bat
-start_riskai*.py
-start_riskai*.sh
-start-research-demo.sh
-start-riskai-simple.py
-start-riskai.bat
-start-riskai.sh
-start_riskai_docker.*
-test_riskai_services.sh
+# Startup scripts are now included for user convenience
+# Removed from ignore to support multiple installation methods
 
 # Build and distribution files
 build_standalone.py
@@ -155,18 +146,7 @@ create_distribution.py
 install_riskai.py
 riskai_portable_darwin.zip
 
-# Multiple startup scripts (keep only essential ones)
-start_riskai 2.py
-start_riskai_docker.bat
-start_riskai_docker.sh
-start_riskai.py
-start_riskai.sh
-start-research-demo.sh
-start-riskai-dev.bat
-start-riskai-dev.sh
-start-riskai-simple.py
-start-riskai.bat
-start-riskai.sh
+# Keeping all startup scripts for multiple deployment options
 
 # Screenshots and large files
 *.png
