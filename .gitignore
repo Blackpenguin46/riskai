@@ -115,6 +115,12 @@ simple_api.py
 start-riskai-dev.*
 frontend_test_data.json
 
+# Backup and old files
+*-backup.*
+*-old.*
+*.backup
+*.old
+
 # Documentation - Keep only README.md and LICENSE
 # Remove ALL extra documentation
 CHANGELOG.md

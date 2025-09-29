@@ -12,8 +12,10 @@ COPY frontend/package*.json ./
 # Install dependencies
 RUN npm install
 
-# Copy the application code
+# Copy the application code (excluding backup files)
 COPY frontend/ .
+RUN find . -name "*-backup.*" -delete && \
+    find . -name "*-old.*" -delete
 
 # Build the application (use cross-platform command)
 RUN npm run build || npx next build --no-lint
