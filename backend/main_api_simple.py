@@ -40,6 +40,15 @@ try:
 except ImportError as e:
     logger.warning(f"Could not import chatbot_router: {e}")
 
+# Import enterprise assessment router if available
+try:
+    from assessment.enterprise_assessment_api import router as enterprise_router
+    app.include_router(enterprise_router, prefix="/api")
+    logger.info("Enterprise assessment API loaded successfully")
+except ImportError as e:
+    logger.warning(f"Could not import enterprise_router: {e}")
+    enterprise_router = None
+
 # Health check endpoint
 @app.get("/health")
 def health_check():
@@ -65,72 +74,8 @@ def get_system_status():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-# Assessment questions endpoint
-@app.get("/api/assessment/enterprise/questions")
-def get_assessment_questions():
-    """Get enterprise assessment questions"""
-    return {
-        "sections": [
-            {
-                "id": "governance",
-                "name": "Governance & Risk Management",
-                "questions": [
-                    {
-                        "id": "gov_001",
-                        "text": "What is your current cybersecurity governance maturity level?",
-                        "type": "scale",
-                        "scale_min": 1,
-                        "scale_max": 10
-                    }
-                ]
-            },
-            {
-                "id": "access_control", 
-                "name": "Access Control & Identity",
-                "questions": [
-                    {
-                        "id": "access_001",
-                        "text": "What percentage of your users have multi-factor authentication enabled?",
-                        "type": "percentage"
-                    }
-                ]
-            }
-        ],
-        "total_questions": 2,
-        "estimated_time": "5 minutes"
-    }
-
-# Submit assessment endpoint
-@app.post("/api/assessment/enterprise/submit")
-def submit_assessment(data: Dict[str, Any]):
-    """Submit assessment answers"""
-    logger.info(f"Received assessment submission: {data}")
-    
-    # Mock scoring response
-    return {
-        "assessment_id": f"assessment_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
-        "overall_score": 75.5,
-        "risk_level": "Medium Risk",
-        "sections": [
-            {
-                "name": "Governance & Risk Management",
-                "score": 80.0,
-                "status": "Good"
-            },
-            {
-                "name": "Access Control & Identity", 
-                "score": 71.0,
-                "status": "Needs Improvement"
-            }
-        ],
-        "recommendations": [
-            "Implement comprehensive security awareness training",
-            "Establish regular vulnerability assessments",
-            "Develop incident response procedures"
-        ],
-        "ai_feedback": "Based on your responses, your organization shows good governance practices but needs improvement in access control. Focus on implementing MFA across all systems and conducting regular security training.",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+# Note: Enterprise assessment endpoints are now provided by enterprise_assessment_api router
+# which includes the full 120-question assessment with dynamic scoring
 
 # Company profile endpoints
 @app.post("/api/company/profile")  
