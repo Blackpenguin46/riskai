@@ -67,3 +67,9 @@ coverage/
 Dockerfile*
 docker-compose*
 .dockerignore
+
+# Backup and old files
+*-backup.*
+*-old.*
+*.backup
+*.old
