@@ -31,7 +31,7 @@ RiskAI is a comprehensive, AI-powered cybersecurity risk assessment platform des
 
 **Clone and Start:**
 ```bash
-git clone https://github.com/yourusername/riskai.git
+git clone https://github.com/blackpenguin46/riskai.git
 cd riskai
 docker-compose up --build -d
 ```
